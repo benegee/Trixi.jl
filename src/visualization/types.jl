@@ -68,7 +68,7 @@ mesh.
     This is an experimental feature and may change in future releases.
 """
 struct PlotData3DCartesian{Coordinates, Data, VariableNames, Vertices} <:
-       AbstractPlotData{2}
+       AbstractPlotData{3}
     x::Coordinates
     y::Coordinates
     z::Coordinates
