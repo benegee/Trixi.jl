@@ -355,29 +355,35 @@ function get_data_3d(center_level_0, length_level_0, coordinates, levels,
     end
 
     # Interpolate unstructured DG data to structured data
-    (structured_data = unstructured2structured(unstructured_data,
-                                               normalized_coordinates,
-                                               levels, resolution, nvisnodes_per_level))
+    (structured_data = unstructured2structured3D(unstructured_data,
+                                                 normalized_coordinates,
+                                                 levels, resolution,
+                                                 nvisnodes_per_level))
 
     # Interpolate cell-centered values to node-centered values
-    node_centered_data = cell2node(structured_data)
+    node_centered_data = cell2node3D(structured_data)
 
     # Determine axis coordinates for contour plot
     xs = collect(range(-1, 1, length = resolution + 1)) .* length_level_0 / 2 .+
          center_level_0[1]
     ys = collect(range(-1, 1, length = resolution + 1)) .* length_level_0 / 2 .+
          center_level_0[2]
+    zs = collect(range(-1, 1, length = resolution + 1)) .* length_level_0 / 2 .+
+         center_level_0[3]
 
     # Determine element vertices to plot grid lines
     if grid_lines
-        mesh_vertices_x, mesh_vertices_y = calc_vertices(coordinates, levels,
-                                                         length_level_0)
+        mesh_vertices_x, mesh_vertices_y, mesh_vertices_z = calc_vertices(coordinates,
+                                                                          levels,
+                                                                          length_level_0)
     else
         mesh_vertices_x = Vector{Float64}(undef, 0)
         mesh_vertices_y = Vector{Float64}(undef, 0)
+        mesh_vertices_z = Vector{Float64}(undef, 0)
     end
 
-    return xs, ys, node_centered_data, mesh_vertices_x, mesh_vertices_y
+    return xs, ys, zs, node_centered_data, mesh_vertices_x, mesh_vertices_y,
+           mesh_vertices_z
 end
 
 # Extract data from a 2D/3D DG solution and prepare it for visualization as a heatmap/contour plot.
@@ -562,41 +568,82 @@ end
 function cell2node3D(cell_centered_data)
     # Create temporary data structure to make the averaging algorithm as simple
     # as possible (by using a ghost layer)
-    tmp = similar(first(cell_centered_data), size(first(cell_centered_data)) .+ (2, 2))
+    tmp = similar(first(cell_centered_data),
+                  size(first(cell_centered_data)) .+ (2, 2, 2))
 
     # Create output data structure
-    resolution_in, _ = size(first(cell_centered_data))
+    resolution_in, _, _ = size(first(cell_centered_data))
     resolution_out = resolution_in + 1
-    node_centered_data = [Matrix{Float64}(undef, resolution_out, resolution_out)
+    node_centered_data = [Array{Float64, 3}(undef, resolution_out, resolution_out,
+                                            resolution_out)
                           for _ in eachindex(cell_centered_data)]
 
     for (cell_data, node_data) in zip(cell_centered_data, node_centered_data)
         # Fill center with original data
-        tmp[2:(end - 1), 2:(end - 1)] .= cell_data
+        tmp[2:(end - 1), 2:(end - 1), 2:(end - 1)] .= cell_data
 
-        # Fill sides with opposite data (periodic domain)
+        # Fill faces with opposite data (periodic domain)
         # x-direction
-        tmp[1, 2:(end - 1)] .= cell_data[end, :]
-        tmp[end, 2:(end - 1)] .= cell_data[1, :]
+        tmp[1, 2:(end - 1), 2:(end - 1)] .= cell_data[end, :, :]
+        tmp[end, 2:(end - 1), 2:(end - 1)] .= cell_data[1, :, :]
         # y-direction
-        tmp[2:(end - 1), 1] .= cell_data[:, end]
-        tmp[2:(end - 1), end] .= cell_data[:, 1]
+        tmp[2:(end - 1), 1, 2:(end - 1)] .= cell_data[:, end, :]
+        tmp[2:(end - 1), end, 2:(end - 1)] .= cell_data[:, 1, :]
+        # z-direction
+        tmp[2:(end - 1), 2:(end - 1), 1] .= cell_data[:, :, end]
+        tmp[2:(end - 1), 2:(end - 1), end] .= cell_data[:, :, 1]
+
+        # Edges
+        # x-direction
+        tmp[2:(end - 1), 1, 1] .= cell_data[:, end, 1]
+        tmp[2:(end - 1), end, 1] .= cell_data[:, 1, 1]
+        tmp[2:(end - 1), 1, end] .= cell_data[:, end, end]
+        tmp[2:(end - 1), end, end] .= cell_data[:, 1, end]
+        # y-direction
+        tmp[1, 2:(end - 1), 1] .= cell_data[end, :, 1]
+        tmp[end, 2:(end - 1), 1] .= cell_data[1, :, 1]
+        tmp[1, 2:(end - 1), end] .= cell_data[end, :, end]
+        tmp[end, 2:(end - 1), end] .= cell_data[1, :, end]
+        # z-direction
+        tmp[1, 1, 2:(end - 1)] .= cell_data[end, 1, :]
+        tmp[end, 1, 2:(end - 1)] .= cell_data[1, 1, :]
+        tmp[1, end, 2:(end - 1)] .= cell_data[end, end, :]
+        tmp[end, end, 2:(end - 1)] .= cell_data[1, end, :]
+
         # Corners
-        tmp[1, 1] = cell_data[end, end]
-        tmp[end, 1] = cell_data[1, end]
-        tmp[1, end] = cell_data[end, 1]
-        tmp[end, end] = cell_data[1, 1]
+        tmp[1, 1, 1] = cell_data[end, end, end]
+        tmp[end, 1, 1] = cell_data[1, end, end]
+        tmp[1, end, 1] = cell_data[end, 1, end]
+        tmp[end, end, 1] = cell_data[1, 1, end]
+        tmp[1, 1, end] = cell_data[end, end, 1]
+        tmp[end, 1, end] = cell_data[1, end, 1]
+        tmp[1, end, end] = cell_data[end, 1, 1]
+        tmp[end, end, end] = cell_data[1, 1, 1]
 
         # Obtain node-centered value by averaging over neighboring cell-centered values
-        for j in 1:resolution_out
-            for i in 1:resolution_out
-                node_data[i, j] = (tmp[i, j] +
-                                   tmp[i + 1, j] +
-                                   tmp[i, j + 1] +
-                                   tmp[i + 1, j + 1]) / 4
+        for k in 1:resolution_out
+            for j in 1:resolution_out
+                for i in 1:resolution_out
+                    node_data[i, j, k] = (tmp[i, j, k] +
+                                          tmp[i + 1, j, k] +
+                                          tmp[i, j + 1, k] +
+                                          tmp[i + 1, j + 1, k] +
+                                          tmp[i, j, k + 1] +
+                                          tmp[i + 1, j, k + 1] +
+                                          tmp[i, j + 1, k + 1] +
+                                          tmp[i + 1, j + 1, k + 1]) / 8
+                end
             end
         end
     end
+
+    # Transpose
+    # TODO ???
+    for (index, data) in enumerate(node_centered_data)
+        node_centered_data[index] = permutedims(data, (3, 2, 1))
+    end
+
+    return node_centered_data
 end
 
 # Convert cell-centered values to node-centered values by averaging over all
@@ -1293,7 +1340,7 @@ end
 function unstructured2structured3D(unstructured_data, normalized_coordinates,
                                    levels, resolution, nvisnodes_per_level)
     # Extract data shape information
-    n_nodes_in, _, n_elements, n_variables = size(unstructured_data)
+    n_nodes_in, _, _, n_elements, n_variables = size(unstructured_data)
 
     # Get node coordinates for DG locations on reference element
     nodes_in, _ = gauss_lobatto_nodes_weights(n_nodes_in)
@@ -1310,17 +1357,18 @@ function unstructured2structured3D(unstructured_data, normalized_coordinates,
     end
 
     # For each element, calculate index position at which to insert data in global data structure
-    lower_left_index = element2index(normalized_coordinates, levels, resolution,
-                                     nvisnodes_per_level)
+    lower_left_index = element2index3D(normalized_coordinates, levels, resolution,
+                                       nvisnodes_per_level)
 
     # Create output data structure
-    structured = [Matrix{Float64}(undef, resolution, resolution) for _ in 1:n_variables]
+    structured = [Array{Float64, 3}(undef, resolution, resolution, resolution)
+                  for _ in 1:n_variables]
 
     # For each variable, interpolate element data and store to global data structure
     for v in 1:n_variables
         # Reshape data array for use in multiply_dimensionwise function
-        reshaped_data = reshape(unstructured_data[:, :, :, v], 1, n_nodes_in,
-                                n_nodes_in, n_elements)
+        reshaped_data = reshape(unstructured_data[:, :, :, :, v], 1, n_nodes_in,
+                                n_nodes_in, n_nodes_in, n_elements)
 
         for element_id in 1:n_elements
             # Extract level for convenience
@@ -1333,13 +1381,15 @@ function unstructured2structured3D(unstructured_data, normalized_coordinates,
 
             # Interpolate data
             vandermonde = vandermonde_per_level[level + 1]
-            structured[v][first[1]:last[1], first[2]:last[2]] .= (reshape(multiply_dimensionwise(vandermonde,
-                                                                                                 reshaped_data[:,
-                                                                                                               :,
-                                                                                                               :,
-                                                                                                               element_id]),
-                                                                          n_nodes_out,
-                                                                          n_nodes_out))
+            structured[v][first[1]:last[1], first[2]:last[2], first[3]:last[3]] .= (reshape(multiply_dimensionwise(vandermonde,
+                                                                                                                   reshaped_data[:,
+                                                                                                                                 :,
+                                                                                                                                 :,
+                                                                                                                                 :,
+                                                                                                                                 element_id]),
+                                                                                            n_nodes_out,
+                                                                                            n_nodes_out,
+                                                                                            n_nodes_out))
         end
     end
 
