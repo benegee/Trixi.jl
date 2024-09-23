@@ -341,7 +341,6 @@ function get_data_3d(center_level_0, length_level_0, coordinates, levels,
     resolution = nvisnodes_at_max_level * 2^max_level
     nvisnodes_per_level = [2^(max_level - level) * nvisnodes_at_max_level
                            for level in 0:max_level]
-                           for level in 0:max_level]
     # nvisnodes_per_level is an array (accessed by "level + 1" to accommodate
     # level-0-cell) that contains the number of visualization nodes for any
     # refinement level to visualize on an equidistant grid
@@ -351,8 +350,6 @@ function get_data_3d(center_level_0, length_level_0, coordinates, levels,
     normalized_coordinates = similar(coordinates)
     for element_id in 1:n_elements
         @views normalized_coordinates[:, element_id] .= ((coordinates[:, element_id] .-
-                                                          center_level_0) ./
-                                                         (length_level_0 / 2))
                                                           center_level_0) ./
                                                          (length_level_0 / 2))
     end
@@ -367,7 +364,6 @@ function get_data_3d(center_level_0, length_level_0, coordinates, levels,
 
     # Determine axis coordinates for contour plot
     xs = collect(range(-1, 1, length = resolution + 1)) .* length_level_0 / 2 .+
-         center_level_0[1]
          center_level_0[1]
     ys = collect(range(-1, 1, length = resolution + 1)) .* length_level_0 / 2 .+
          center_level_0[2]
@@ -600,10 +596,6 @@ function cell2node3D(cell_centered_data)
                                    tmp[i + 1, j] +
                                    tmp[i, j + 1] +
                                    tmp[i + 1, j + 1]) / 4
-            end
-        end
-    end
-end
             end
         end
     end
@@ -1301,7 +1293,6 @@ end
 # Note: This is a low-level function that is not considered as part of Trixi.jl's interface and may
 #       thus be changed in future releases.
 function unstructured2structured3D(unstructured_data, normalized_coordinates,
-                                   levels, resolution, nvisnodes_per_level)
                                    levels, resolution, nvisnodes_per_level)
     # Extract data shape information
     n_nodes_in, _, n_elements, n_variables = size(unstructured_data)
