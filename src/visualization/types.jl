@@ -116,18 +116,6 @@ struct PlotData2DCartesian{Coordinates, Data, VariableNames, Vertices} <:
 end
 
 # Show only a truncated output for convenience (the full data does not make sense)
-function Base.show(io::IO, pd::PlotData3DCartesian)
-    @nospecialize pd # reduce precompilation time
-
-    print(io, "PlotData3DCartesian{",
-          typeof(pd.x), ",",
-          typeof(pd.data), ",",
-          typeof(pd.variable_names), ",",
-          typeof(pd.mesh_vertices_x),
-          "}(<x>, <y>, <z>,  <data>, <variable_names>, <mesh_vertices_x>, <mesh_vertices_y>, <mesh_vertices_z>)")
-end
-
-# Show only a truncated output for convenience (the full data does not make sense)
 function Base.show(io::IO, pd::PlotData2DCartesian)
     @nospecialize pd # reduce precompilation time
 
@@ -137,22 +125,6 @@ function Base.show(io::IO, pd::PlotData2DCartesian)
           typeof(pd.variable_names), ",",
           typeof(pd.mesh_vertices_x),
           "}(<x>, <y>, <data>, <variable_names>, <mesh_vertices_x>, <mesh_vertices_y>)")
-end
-
-# holds plotting information for UnstructuredMesh2D and DGMulti-compatible meshes
-struct PlotData3DTriangulated{DataType, NodeType, FaceNodeType, FaceDataType,
-                              VariableNames, PlottingTriangulation} <:
-       AbstractPlotData{2}
-    x::NodeType # physical nodal coordinates, size (num_plotting_nodes x num_elements)
-    y::NodeType
-    z::NodeType
-    data::DataType
-    t::PlottingTriangulation
-    x_face::FaceNodeType
-    y_face::FaceNodeType
-    z_face::FaceNodeType
-    face_data::FaceDataType
-    variable_names::VariableNames
 end
 
 # holds plotting information for UnstructuredMesh2D and DGMulti-compatible meshes
@@ -167,19 +139,6 @@ struct PlotData2DTriangulated{DataType, NodeType, FaceNodeType, FaceDataType,
     y_face::FaceNodeType
     face_data::FaceDataType
     variable_names::VariableNames
-end
-
-# Show only a truncated output for convenience (the full data does not make sense)
-function Base.show(io::IO, pd::PlotData3DTriangulated)
-    @nospecialize pd # reduce precompilation time
-
-    print(io, "PlotData3DTriangulated{",
-          typeof(pd.x), ", ",
-          typeof(pd.data), ", ",
-          typeof(pd.x_face), ", ",
-          typeof(pd.face_data), ", ",
-          typeof(pd.variable_names),
-          "}(<x>, <y>, <z>, <data>, <plot_triangulation>, <x_face>, <y_face>, <z_face>, <face_data>, <variable_names>)")
 end
 
 # Show only a truncated output for convenience (the full data does not make sense)

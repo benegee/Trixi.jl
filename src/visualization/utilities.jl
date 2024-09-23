@@ -597,6 +597,7 @@ function cell2node3D(cell_centered_data)
             end
         end
     end
+end
 
 # Convert cell-centered values to node-centered values by averaging over all
 # four neighbors and making use of the periodicity of the solution
