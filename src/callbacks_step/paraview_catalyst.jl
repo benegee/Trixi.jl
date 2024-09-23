@@ -147,13 +147,7 @@ function (visualization_callback::ParaviewCatalystCallback)(integrator)
             y0 = min(pd.y...)
             dy = min([pd.y[i + 1] - pd.y[i] for i in 1:(c_j - 1)]...)
         elseif ndims(mesh) == 3
-            z_coords = mesh.tree.coordinates[3, leaf_cell_ids]
-            z_h1 = [[z_coords[i] - 0.5 * cell_length[i] z_coords[i] + 0.5 * cell_length[i]] for i in 1:length(z_coords)]
-            z_h1 = unique!(z_h1)
-            z_h = [z_h1[j][k] for j in 1:length(z_h1) for k in 1:2]
-            pd_z = [PlotData2D(integrator.u, integrator.p, slice=:xy, point=(0,0,z)) for z in z_h]
-            pd = pd_z[1]
-
+            pd = PlotData3D(integrator.u, integrator.p; grid_lines=false)
             c_i = length(pd.x)
             x0 = min(pd.x...)
             dx = min([pd.x[i + 1] - pd.x[i] for i in 1:(c_i - 1)]...)
@@ -162,23 +156,9 @@ function (visualization_callback::ParaviewCatalystCallback)(integrator)
             y0 = min(pd.y...)
             dy = min([pd.y[i + 1] - pd.y[i] for i in 1:(c_j - 1)]...)
 
-            c_k = length(z_h)
-            z0 = min(z_h...)
-            dz = min([z_h[i + 1] - z_h[i] for i in 1:(c_k - 1)]...)
-
-            #TODO sobald PlotData3D implementiert ersetzen mit 
-            # pd = PlotData3D(integrator.u, integrator.p)
-            # c_i = length(pd.x)
-            # x0 = min(pd.x...)
-            # dx = min([pd.x[i + 1] - pd.x[i] for i in 1:(c_i - 1)]...)
-
-            # c_j = length(pd.y)
-            # y0 = min(pd.y...)
-            # dy = min([pd.y[i + 1] - pd.y[i] for i in 1:(c_j - 1)]...)
-
-            # c_k = length(pd.z)
-            # z0 = min(pd.z...)
-            # dz = min([pd.z[i + 1] - pd.z[i] for i in 1:(c_k - 1)]...)
+            c_k = length(pd.z)
+            z0 = min(pd.z...)
+            dz = min([pd.z[i + 1] - pd.z[i] for i in 1:(c_k - 1)]...)
         end
 
         node["catalyst/channels/input/data/coordsets/coords/dims/i"] = c_i
@@ -191,7 +171,7 @@ function (visualization_callback::ParaviewCatalystCallback)(integrator)
             if ndims(mesh) > 2
                 node["catalyst/channels/input/data/coordsets/coords/dims/k"] = c_k
                 node["catalyst/channels/input/data/coordsets/coords/origin/z"] = z0
-                node["catalyst/channels/input/data/coordsets/coords/spacing/dz"] = (c_i/c_k) * dx #TODO sobald PlotData3D implementiert auf dz setzen
+                node["catalyst/channels/input/data/coordsets/coords/spacing/dz"] = dz
             end
         end
 
@@ -207,12 +187,7 @@ function (visualization_callback::ParaviewCatalystCallback)(integrator)
             solution = [pd.data[1][i,j] for j in 1:c_j for i in 1:c_i]
             node["catalyst/channels/input/data/fields/solution/values"] = solution
         elseif ndims(mesh) == 3
-            solution_h = [[pd_z[k].data[1][i,j] for j in 1:c_j for i in 1:c_i] for k in 1:c_k]
-            solution = [solution_h[i][j] for i in 1:c_k for j in 1:(c_i * c_j)]
-
-            #TODO sobald PlotData3D implementiert, ersetzen durch
-            # solution = [pd.data[1][i,j,k] for k in 1:c_k for j in 1:c_j for i in 1:c_i]
-
+            solution = [pd.data[1][i,j,k] for k in 1:c_k for j in 1:c_j for i in 1:c_i]
             node["catalyst/channels/input/data/fields/solution/values"] = solution
         end
         
