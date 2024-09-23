@@ -59,6 +59,30 @@ end
 Base.eltype(pd::AbstractPlotData) = Pair{String, PlotDataSeries{typeof(pd)}}
 
 """
+    PlotData3D
+
+Holds all relevant data for creating 2D plots of multiple solution variables and to visualize the
+mesh.
+
+!!! warning "Experimental implementation"
+    This is an experimental feature and may change in future releases.
+"""
+struct PlotData3DCartesian{Coordinates, Data, VariableNames, Vertices} <:
+       AbstractPlotData{2}
+    x::Coordinates
+    y::Coordinates
+    z::Coordinates
+    data::Data
+    variable_names::VariableNames
+    mesh_vertices_x::Vertices
+    mesh_vertices_y::Vertices
+    mesh_vertices_z::Vertices
+    orientation_x::Int
+    orientation_y::Int
+    orientation_z::Int
+end
+
+"""
     PlotData2D
 
 Holds all relevant data for creating 2D plots of multiple solution variables and to visualize the
@@ -80,6 +104,18 @@ struct PlotData2DCartesian{Coordinates, Data, VariableNames, Vertices} <:
 end
 
 # Show only a truncated output for convenience (the full data does not make sense)
+function Base.show(io::IO, pd::PlotData3DCartesian)
+    @nospecialize pd # reduce precompilation time
+
+    print(io, "PlotData3DCartesian{",
+          typeof(pd.x), ",",
+          typeof(pd.data), ",",
+          typeof(pd.variable_names), ",",
+          typeof(pd.mesh_vertices_x),
+          "}(<x>, <y>, <z>,  <data>, <variable_names>, <mesh_vertices_x>, <mesh_vertices_y>, <mesh_vertices_z>)")
+end
+
+# Show only a truncated output for convenience (the full data does not make sense)
 function Base.show(io::IO, pd::PlotData2DCartesian)
     @nospecialize pd # reduce precompilation time
 
@@ -89,6 +125,22 @@ function Base.show(io::IO, pd::PlotData2DCartesian)
           typeof(pd.variable_names), ",",
           typeof(pd.mesh_vertices_x),
           "}(<x>, <y>, <data>, <variable_names>, <mesh_vertices_x>, <mesh_vertices_y>)")
+end
+
+# holds plotting information for UnstructuredMesh2D and DGMulti-compatible meshes
+struct PlotData3DTriangulated{DataType, NodeType, FaceNodeType, FaceDataType,
+                              VariableNames, PlottingTriangulation} <:
+       AbstractPlotData{2}
+    x::NodeType # physical nodal coordinates, size (num_plotting_nodes x num_elements)
+    y::NodeType
+    z::NodeType
+    data::DataType
+    t::PlottingTriangulation
+    x_face::FaceNodeType
+    y_face::FaceNodeType
+    z_face::FaceNodeType
+    face_data::FaceDataType
+    variable_names::VariableNames
 end
 
 # holds plotting information for UnstructuredMesh2D and DGMulti-compatible meshes
@@ -103,6 +155,19 @@ struct PlotData2DTriangulated{DataType, NodeType, FaceNodeType, FaceDataType,
     y_face::FaceNodeType
     face_data::FaceDataType
     variable_names::VariableNames
+end
+
+# Show only a truncated output for convenience (the full data does not make sense)
+function Base.show(io::IO, pd::PlotData3DTriangulated)
+    @nospecialize pd # reduce precompilation time
+
+    print(io, "PlotData3DTriangulated{",
+          typeof(pd.x), ", ",
+          typeof(pd.data), ", ",
+          typeof(pd.x_face), ", ",
+          typeof(pd.face_data), ", ",
+          typeof(pd.variable_names),
+          "}(<x>, <y>, <z>, <data>, <plot_triangulation>, <x_face>, <y_face>, <z_face>, <face_data>, <variable_names>)")
 end
 
 # Show only a truncated output for convenience (the full data does not make sense)
@@ -268,7 +333,7 @@ function PlotData3DCartesian(u, mesh::TreeMesh, equations, solver, cache;
 
     unstructured_data = get_unstructured_data(u, solution_variables_, mesh, equations,
                                               solver, cache)
-    x, y, data, mesh_vertices_x, mesh_vertices_y = get_data_2d(center_level_0,
+    x, y, z, data, mesh_vertices_x, mesh_vertices_y, mesh_vertices_z = get_data_3d(center_level_0,
                                                                length_level_0,
                                                                leaf_cell_ids,
                                                                coordinates, levels,
@@ -277,15 +342,16 @@ function PlotData3DCartesian(u, mesh::TreeMesh, equations, solver, cache;
                                                                nnodes(solver),
                                                                grid_lines,
                                                                max_supported_level,
-                                                               nvisnodes,
-                                                               slice, point)
+                                                               nvisnodes)
     variable_names = SVector(varnames(solution_variables_, equations))
 
-    orientation_x, orientation_y = _get_orientations(mesh, slice)
+    orientation_x = 1
+    orientation_y = 2
+    orientation_z = 3
 
-    return PlotData3DCartesian(x, y, data, variable_names, mesh_vertices_x,
-                               mesh_vertices_y,
-                               orientation_x, orientation_y)
+    return PlotData3DCartesian(x, y, z, data, variable_names, mesh_vertices_x,
+                               mesh_vertices_y, mesh_vertices_z,
+                               orientation_x, orientation_y, orientation_z)
 end
 
 """

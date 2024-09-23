@@ -324,61 +324,64 @@ end
 function get_data_3d(center_level_0, length_level_0, leaf_cells, coordinates, levels,
     ndims, unstructured_data, n_nodes,
     grid_lines = false, max_supported_level = 11, nvisnodes = nothing)
-# Determine resolution for data interpolation
-max_level = maximum(levels)
-if max_level > max_supported_level
-error("Maximum refinement level $max_level is higher than " *
-"maximum supported level $max_supported_level")
-end
-max_available_nodes_per_finest_element = 2^(max_supported_level - max_level)
-if nvisnodes === nothing
-max_nvisnodes = 2 * n_nodes
-elseif nvisnodes == 0
-max_nvisnodes = n_nodes
-else
-max_nvisnodes = nvisnodes
-end
-nvisnodes_at_max_level = min(max_available_nodes_per_finest_element, max_nvisnodes)
-resolution = nvisnodes_at_max_level * 2^max_level
-nvisnodes_per_level = [2^(max_level - level) * nvisnodes_at_max_level
-          for level in 0:max_level]
-# nvisnodes_per_level is an array (accessed by "level + 1" to accommodate
-# level-0-cell) that contains the number of visualization nodes for any
-# refinement level to visualize on an equidistant grid
+    # Determine resolution for data interpolation
+    max_level = maximum(levels)
+    if max_level > max_supported_level
+        error("Maximum refinement level $max_level is higher than " *
+        "maximum supported level $max_supported_level")
+    end
+    max_available_nodes_per_finest_element = 2^(max_supported_level - max_level)
+    if nvisnodes === nothing
+        max_nvisnodes = 2 * n_nodes
+    elseif nvisnodes == 0
+        max_nvisnodes = n_nodes
+    else
+        max_nvisnodes = nvisnodes
+    end
+    nvisnodes_at_max_level = min(max_available_nodes_per_finest_element, max_nvisnodes)
+    resolution = nvisnodes_at_max_level * 2^max_level
+    nvisnodes_per_level = [2^(max_level - level) * nvisnodes_at_max_level
+            for level in 0:max_level]
+    # nvisnodes_per_level is an array (accessed by "level + 1" to accommodate
+    # level-0-cell) that contains the number of visualization nodes for any
+    # refinement level to visualize on an equidistant grid
 
-# Normalize element coordinates: move center to (0, 0) and domain size to [-1, 1]²
-n_elements = length(levels)
-normalized_coordinates = similar(coordinates)
-for element_id in 1:n_elements
-@views normalized_coordinates[:, element_id] .= ((coordinates[:, element_id] .-
-                                         center_level_0) ./
-                                        (length_level_0 / 2))
-end
+    # Normalize element coordinates: move center to (0, 0) and domain size to [-1, 1]²
+    n_elements = length(levels)
+    normalized_coordinates = similar(coordinates)
+    for element_id in 1:n_elements
+        @views normalized_coordinates[:, element_id] .= ((coordinates[:, element_id] .-
+                                            center_level_0) ./
+                                            (length_level_0 / 2))
+    end
 
-# Interpolate unstructured DG data to structured data
-(structured_data = unstructured2structured(unstructured_data,
-                              normalized_coordinates,
-                              levels, resolution, nvisnodes_per_level))
+    # Interpolate unstructured DG data to structured data
+    (structured_data = unstructured2structured3D(unstructured_data,
+                                normalized_coordinates,
+                                levels, resolution, nvisnodes_per_level))
 
-# Interpolate cell-centered values to node-centered values
-node_centered_data = cell2node(structured_data)
+    # Interpolate cell-centered values to node-centered values
+    node_centered_data = cell2node3D(structured_data)
 
-# Determine axis coordinates for contour plot
-xs = collect(range(-1, 1, length = resolution + 1)) .* length_level_0 / 2 .+
-center_level_0[1]
-ys = collect(range(-1, 1, length = resolution + 1)) .* length_level_0 / 2 .+
-center_level_0[2]
+    # Determine axis coordinates for contour plot
+    xs = collect(range(-1, 1, length = resolution + 1)) .* length_level_0 / 2 .+
+    center_level_0[1]
+    ys = collect(range(-1, 1, length = resolution + 1)) .* length_level_0 / 2 .+
+    center_level_0[2]
+    zs = collect(range(-1, 1, length = resolution + 1)) .* length_level_0 / 2 .+
+    center_level_0[3]
 
-# Determine element vertices to plot grid lines
-if grid_lines
-mesh_vertices_x, mesh_vertices_y = calc_vertices(coordinates, levels,
-                                        length_level_0)
-else
-mesh_vertices_x = Vector{Float64}(undef, 0)
-mesh_vertices_y = Vector{Float64}(undef, 0)
-end
+    # Determine element vertices to plot grid lines
+    if grid_lines
+        mesh_vertices_x, mesh_vertices_y, mesh_vertices_z = calc_vertices(coordinates, levels,
+                                            length_level_0)
+    else
+        mesh_vertices_x = Vector{Float64}(undef, 0)
+        mesh_vertices_y = Vector{Float64}(undef, 0)
+        mesh_vertices_z = Vector{Float64}(undef, 0)
+    end
 
-return xs, ys, node_centered_data, mesh_vertices_x, mesh_vertices_y
+    return xs, ys, zs, node_centered_data, mesh_vertices_x, mesh_vertices_y, mesh_vertices_z
 end
 
 # Extract data from a 2D/3D DG solution and prepare it for visualization as a heatmap/contour plot.
@@ -554,6 +557,50 @@ function get_unstructured_data(u, solution_variables, mesh, equations, solver, c
 
     return unstructured_data
 end
+
+# Convert cell-centered values to node-centered values by averaging over all
+# four neighbors and making use of the periodicity of the solution
+#
+# Note: This is a low-level function that is not considered as part of Trixi.jl's interface and may
+#       thus be changed in future releases.
+function cell2node3D(cell_centered_data)
+    # Create temporary data structure to make the averaging algorithm as simple
+    # as possible (by using a ghost layer)
+    tmp = similar(first(cell_centered_data), size(first(cell_centered_data)) .+ (2, 2))
+
+    # Create output data structure
+    resolution_in, _ = size(first(cell_centered_data))
+    resolution_out = resolution_in + 1
+    node_centered_data = [Matrix{Float64}(undef, resolution_out, resolution_out)
+                          for _ in eachindex(cell_centered_data)]
+
+    for (cell_data, node_data) in zip(cell_centered_data, node_centered_data)
+        # Fill center with original data
+        tmp[2:(end - 1), 2:(end - 1)] .= cell_data
+
+        # Fill sides with opposite data (periodic domain)
+        # x-direction
+        tmp[1, 2:(end - 1)] .= cell_data[end, :]
+        tmp[end, 2:(end - 1)] .= cell_data[1, :]
+        # y-direction
+        tmp[2:(end - 1), 1] .= cell_data[:, end]
+        tmp[2:(end - 1), end] .= cell_data[:, 1]
+        # Corners
+        tmp[1, 1] = cell_data[end, end]
+        tmp[end, 1] = cell_data[1, end]
+        tmp[1, end] = cell_data[end, 1]
+        tmp[end, end] = cell_data[1, 1]
+
+        # Obtain node-centered value by averaging over neighboring cell-centered values
+        for j in 1:resolution_out
+            for i in 1:resolution_out
+                node_data[i, j] = (tmp[i, j] +
+                                   tmp[i + 1, j] +
+                                   tmp[i, j + 1] +
+                                   tmp[i + 1, j + 1]) / 4
+            end
+        end
+    end
 
 # Convert cell-centered values to node-centered values by averaging over all
 # four neighbors and making use of the periodicity of the solution
