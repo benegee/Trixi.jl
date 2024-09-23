@@ -341,6 +341,7 @@ function get_data_3d(center_level_0, length_level_0, coordinates, levels,
     resolution = nvisnodes_at_max_level * 2^max_level
     nvisnodes_per_level = [2^(max_level - level) * nvisnodes_at_max_level
                            for level in 0:max_level]
+                           for level in 0:max_level]
     # nvisnodes_per_level is an array (accessed by "level + 1" to accommodate
     # level-0-cell) that contains the number of visualization nodes for any
     # refinement level to visualize on an equidistant grid
@@ -352,10 +353,12 @@ function get_data_3d(center_level_0, length_level_0, coordinates, levels,
         @views normalized_coordinates[:, element_id] .= ((coordinates[:, element_id] .-
                                                           center_level_0) ./
                                                          (length_level_0 / 2))
+                                                          center_level_0) ./
+                                                         (length_level_0 / 2))
     end
 
     # Interpolate unstructured DG data to structured data
-    (structured_data = unstructured2structured(unstructured_data,
+    (structured_data = unstructured2structured3D(unstructured_data,
                                                normalized_coordinates,
                                                levels, resolution, nvisnodes_per_level))
 
@@ -365,12 +368,15 @@ function get_data_3d(center_level_0, length_level_0, coordinates, levels,
     # Determine axis coordinates for contour plot
     xs = collect(range(-1, 1, length = resolution + 1)) .* length_level_0 / 2 .+
          center_level_0[1]
+         center_level_0[1]
     ys = collect(range(-1, 1, length = resolution + 1)) .* length_level_0 / 2 .+
          center_level_0[2]
+    zs = collect(range(-1, 1, length = resolution + 1)) .* length_level_0 / 2 .+
+    center_level_0[3]
 
     # Determine element vertices to plot grid lines
     if grid_lines
-        mesh_vertices_x, mesh_vertices_y = calc_vertices(coordinates, levels,
+        mesh_vertices_x, mesh_vertices_y, mesh_vertices_z = calc_vertices3D(coordinates, levels,
                                                          length_level_0)
     else
         mesh_vertices_x = Vector{Float64}(undef, 0)
@@ -594,6 +600,10 @@ function cell2node3D(cell_centered_data)
                                    tmp[i + 1, j] +
                                    tmp[i, j + 1] +
                                    tmp[i + 1, j + 1]) / 4
+            end
+        end
+    end
+end
             end
         end
     end
@@ -1292,6 +1302,7 @@ end
 #       thus be changed in future releases.
 function unstructured2structured3D(unstructured_data, normalized_coordinates,
                                    levels, resolution, nvisnodes_per_level)
+                                   levels, resolution, nvisnodes_per_level)
     # Extract data shape information
     n_nodes_in, _, n_elements, n_variables = size(unstructured_data)
 
@@ -1310,11 +1321,11 @@ function unstructured2structured3D(unstructured_data, normalized_coordinates,
     end
 
     # For each element, calculate index position at which to insert data in global data structure
-    lower_left_index = element2index(normalized_coordinates, levels, resolution,
+    lower_left_index = element2index3D(normalized_coordinates, levels, resolution,
                                      nvisnodes_per_level)
 
     # Create output data structure
-    structured = [Matrix{Float64}(undef, resolution, resolution) for _ in 1:n_variables]
+    structured = [Vector{Matrix{Float64}(undef, resolution, resolution)}(undef, resolution) for _ in 1:n_variables]
 
     # For each variable, interpolate element data and store to global data structure
     for v in 1:n_variables
@@ -1414,6 +1425,34 @@ end
 #
 # Note: This is a low-level function that is not considered as part of Trixi.jl's interface and may
 #       thus be changed in future releases.
+function element2index3D(normalized_coordinates, levels, resolution, nvisnodes_per_level)
+    @assert size(normalized_coordinates, 1)==2 "only works in 2D"
+
+    n_elements = length(levels)
+
+    # First, determine lower left coordinate for all cells
+    dx = 2 / resolution
+    ndim = 2
+    lower_left_coordinate = Array{Float64}(undef, ndim, n_elements)
+    for element_id in 1:n_elements
+        nvisnodes = nvisnodes_per_level[levels[element_id] + 1]
+        lower_left_coordinate[1, element_id] = (normalized_coordinates[1, element_id] -
+                                                (nvisnodes - 1) / 2 * dx)
+        lower_left_coordinate[2, element_id] = (normalized_coordinates[2, element_id] -
+                                                (nvisnodes - 1) / 2 * dx)
+    end
+
+    # Then, convert coordinate to global index
+    indices = coordinate2index(lower_left_coordinate, resolution)
+
+    return indices
+end
+
+# For a given normalized element coordinate, return the index of its lower left
+# contribution to the global data structure
+#
+# Note: This is a low-level function that is not considered as part of Trixi.jl's interface and may
+#       thus be changed in future releases.
 function element2index(normalized_coordinates, levels, resolution, nvisnodes_per_level)
     @assert size(normalized_coordinates, 1)==2 "only works in 2D"
 
@@ -1452,6 +1491,140 @@ function coordinate2index(coordinate, resolution::Integer)
     id_y = searchsortedfirst.(Ref(mesh_coordinates), coordinate[2, :],
                               lt = (x, y) -> x .< y .- dx / 2)
     return transpose(hcat(id_x, id_y))
+end
+
+# Calculate the vertices for each mesh cell such that it can be visualized as a closed box
+#
+# Note: This is a low-level function that is not considered as part of Trixi.jl's interface and may
+#       thus be changed in future releases.
+function calc_vertices3D(coordinates, levels, length_level_0)
+    ndim = size(coordinates, 1)
+    @assert ndim==2 "only works in 2D"
+
+    # Initialize output arrays
+    n_elements = length(levels)
+    n_points_per_element = 2^ndim + 2
+    x = Vector{Float64}(undef, n_points_per_element * n_elements)
+    y = Vector{Float64}(undef, n_points_per_element * n_elements)
+
+    # Calculate vertices for all coordinates at once
+    for element_id in 1:n_elements
+        length = length_level_0 / 2^levels[element_id]
+        index = n_points_per_element * (element_id - 1)
+        x[index + 1] = coordinates[1, element_id] - 1 / 2 * length
+        x[index + 2] = coordinates[1, element_id] + 1 / 2 * length
+        x[index + 3] = coordinates[1, element_id] + 1 / 2 * length
+        x[index + 4] = coordinates[1, element_id] - 1 / 2 * length
+        x[index + 5] = coordinates[1, element_id] - 1 / 2 * length
+        x[index + 6] = NaN
+
+        y[index + 1] = coordinates[2, element_id] - 1 / 2 * length
+        y[index + 2] = coordinates[2, element_id] - 1 / 2 * length
+        y[index + 3] = coordinates[2, element_id] + 1 / 2 * length
+        y[index + 4] = coordinates[2, element_id] + 1 / 2 * length
+        y[index + 5] = coordinates[2, element_id] - 1 / 2 * length
+        y[index + 6] = NaN
+    end
+
+    return x, y
+end
+
+# Calculate the vertices to plot each grid line for StructuredMesh
+#
+# Note: This is a low-level function that is not considered as part of Trixi.jl's interface and may
+#       thus be changed in future releases.
+function calc_vertices3D(node_coordinates, mesh)
+    @unpack cells_per_dimension = mesh
+    @assert size(node_coordinates, 1)==2 "only works in 2D"
+
+    linear_indices = LinearIndices(size(mesh))
+
+    # Initialize output arrays
+    n_lines = sum(cells_per_dimension) + 2
+    max_length = maximum(cells_per_dimension)
+    n_nodes = size(node_coordinates, 2)
+
+    # Create output as two matrices `x` and `y`, each holding the node locations for each of the `n_lines` grid lines
+    # The # of rows in the matrices must be sufficient to store the longest dimension (`max_length`),
+    # and for each the node locations without doubling the corner nodes (`n_nodes-1`), plus the final node (`+1`)
+    # Rely on Plots.jl to ignore `NaN`s (i.e., they are not plotted) to handle shorter lines
+    x = fill(NaN, max_length * (n_nodes - 1) + 1, n_lines)
+    y = fill(NaN, max_length * (n_nodes - 1) + 1, n_lines)
+
+    line_index = 1
+    # Lines in x-direction
+    # Bottom boundary
+    i = 1
+    for cell_x in axes(mesh, 1)
+        for node in 1:(n_nodes - 1)
+            x[i, line_index] = node_coordinates[1, node, 1, linear_indices[cell_x, 1]]
+            y[i, line_index] = node_coordinates[2, node, 1, linear_indices[cell_x, 1]]
+
+            i += 1
+        end
+    end
+    # Last point on bottom boundary
+    x[i, line_index] = node_coordinates[1, end, 1, linear_indices[end, 1]]
+    y[i, line_index] = node_coordinates[2, end, 1, linear_indices[end, 1]]
+
+    # Other lines in x-direction
+    line_index += 1
+    for cell_y in axes(mesh, 2)
+        i = 1
+        for cell_x in axes(mesh, 1)
+            for node in 1:(n_nodes - 1)
+                x[i, line_index] = node_coordinates[1, node, end,
+                                                    linear_indices[cell_x, cell_y]]
+                y[i, line_index] = node_coordinates[2, node, end,
+                                                    linear_indices[cell_x, cell_y]]
+
+                i += 1
+            end
+        end
+        # Last point on line
+        x[i, line_index] = node_coordinates[1, end, end, linear_indices[end, cell_y]]
+        y[i, line_index] = node_coordinates[2, end, end, linear_indices[end, cell_y]]
+
+        line_index += 1
+    end
+
+    # Lines in y-direction
+    # Left boundary
+    i = 1
+    for cell_y in axes(mesh, 2)
+        for node in 1:(n_nodes - 1)
+            x[i, line_index] = node_coordinates[1, 1, node, linear_indices[1, cell_y]]
+            y[i, line_index] = node_coordinates[2, 1, node, linear_indices[1, cell_y]]
+
+            i += 1
+        end
+    end
+    # Last point on left boundary
+    x[i, line_index] = node_coordinates[1, 1, end, linear_indices[1, end]]
+    y[i, line_index] = node_coordinates[2, 1, end, linear_indices[1, end]]
+
+    # Other lines in y-direction
+    line_index += 1
+    for cell_x in axes(mesh, 1)
+        i = 1
+        for cell_y in axes(mesh, 2)
+            for node in 1:(n_nodes - 1)
+                x[i, line_index] = node_coordinates[1, end, node,
+                                                    linear_indices[cell_x, cell_y]]
+                y[i, line_index] = node_coordinates[2, end, node,
+                                                    linear_indices[cell_x, cell_y]]
+
+                i += 1
+            end
+        end
+        # Last point on line
+        x[i, line_index] = node_coordinates[1, end, end, linear_indices[cell_x, end]]
+        y[i, line_index] = node_coordinates[2, end, end, linear_indices[cell_x, end]]
+
+        line_index += 1
+    end
+
+    return x, y
 end
 
 # Calculate the vertices for each mesh cell such that it can be visualized as a closed box
