@@ -135,7 +135,8 @@ function (visualization_callback::ParaviewCatalystCallback)(integrator)
             pd = PlotData1D(integrator.u, integrator.p)
             c_i = length(pd.x)
             x0 = min(pd.x...)
-            dx = min([pd.x[i + 1] - pd.x[i] for i in 1:(c_i - 1)]...)
+            uniq_ind = unique(i -> pd.x[i], eachindex(pd.x))  # indices of unique elements in pd.x
+            dx = min([pd.x[uniq_ind[i + 1]] - pd.x[uniq_ind[i]] for i in 1:(length(uniq_ind) - 1)]...)
         elseif ndims(mesh) == 2
             pd = PlotData2D(integrator.u, integrator.p)
             
@@ -182,13 +183,11 @@ function (visualization_callback::ParaviewCatalystCallback)(integrator)
         node["catalyst/channels/input/data/fields/solution/topology"] = "mesh"
         node["catalyst/channels/input/data/fields/solution/volume_dependent"] = "false"
         if ndims(mesh) == 1
-            node["catalyst/channels/input/data/fields/solution/values"] = pd.data[1]
+            node["catalyst/channels/input/data/fields/solution/values"] = pd.data
         elseif ndims(mesh) == 2
-            solution = [pd.data[1][i,j] for j in 1:c_j for i in 1:c_i]
-            node["catalyst/channels/input/data/fields/solution/values"] = solution
+            node["catalyst/channels/input/data/fields/solution/values"] = vec(pd.data[1])
         elseif ndims(mesh) == 3
-            solution = [pd.data[1][i,j,k] for k in 1:c_k for j in 1:c_j for i in 1:c_i]
-            node["catalyst/channels/input/data/fields/solution/values"] = solution
+            node["catalyst/channels/input/data/fields/solution/values"] = vec(pd.data[1])
         end
         
 
