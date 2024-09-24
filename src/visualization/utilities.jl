@@ -1465,26 +1465,47 @@ end
 # Note: This is a low-level function that is not considered as part of Trixi.jl's interface and may
 #       thus be changed in future releases.
 function element2index3D(normalized_coordinates, levels, resolution, nvisnodes_per_level)
-    @assert size(normalized_coordinates, 1)==2 "only works in 2D"
+    @assert size(normalized_coordinates, 1)==3 "only works in 3D"
 
     n_elements = length(levels)
 
-    # First, determine lower left coordinate for all cells
+    # First, determine lower left front coordinate for all cells
     dx = 2 / resolution
-    ndim = 2
-    lower_left_coordinate = Array{Float64}(undef, ndim, n_elements)
+    ndim = 3
+    lower_left_front_coordinate = Array{Float64}(undef, ndim, n_elements)
     for element_id in 1:n_elements
         nvisnodes = nvisnodes_per_level[levels[element_id] + 1]
-        lower_left_coordinate[1, element_id] = (normalized_coordinates[1, element_id] -
+        lower_left_front_coordinate[1, element_id] = (normalized_coordinates[1, element_id] -
                                                 (nvisnodes - 1) / 2 * dx)
-        lower_left_coordinate[2, element_id] = (normalized_coordinates[2, element_id] -
+        lower_left_front_coordinate[2, element_id] = (normalized_coordinates[2, element_id] -
+                                                (nvisnodes - 1) / 2 * dx)
+        lower_left_front_coordinate[3, element_id] = (normalized_coordinates[3, element_id] -
                                                 (nvisnodes - 1) / 2 * dx)
     end
 
     # Then, convert coordinate to global index
-    indices = coordinate2index(lower_left_coordinate, resolution)
+    indices = coordinate2index3D(lower_left_front_coordinate, resolution)
 
     return indices
+end
+
+# Find 3D array index for a 3-tuple of normalized, cell-centered coordinates (i.e., in [-1,1])
+#
+# Note: This is a low-level function that is not considered as part of Trixi.jl's interface and may
+#       thus be changed in future releases.
+function coordinate2index3D(coordinate, resolution::Integer)
+    # Calculate 1D normalized coordinates
+    dx = 2 / resolution
+    mesh_coordinates = collect(range(-1 + dx / 2, 1 - dx / 2, length = resolution))
+
+    # Find index
+    id_x = searchsortedfirst.(Ref(mesh_coordinates), coordinate[1, :],
+                              lt = (x, y) -> x .< y .- dx / 2)
+    id_y = searchsortedfirst.(Ref(mesh_coordinates), coordinate[2, :],
+                            lt = (x, y) -> x .< y .- dx / 2)
+    id_z = searchsortedfirst.(Ref(mesh_coordinates), coordinate[3, :],
+                                lt = (x, y) -> x .< y .- dx / 2)
+    return transpose(hcat(id_x, id_y,id_z))
 end
 
 # For a given normalized element coordinate, return the index of its lower left
