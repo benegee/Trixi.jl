@@ -43,7 +43,7 @@ end
                             )
 
 Create a callback that visualizes results during a simulation, also known as *in-situ
-visualization*.
+visualization*. Make sure to set the PARAVIEW_CATALYST_PATH Environment Variable to the path of the Catalyst lib.
 
 !!! warning "Experimental implementation"
     This is an experimental feature and may change in any future releases.
@@ -122,6 +122,7 @@ function (visualization_callback::ParaviewCatalystCallback)(integrator)
         node["catalyst/channels/input/type"] = "mesh"
         node["catalyst/channels/input/data/coordsets/coords/type"] = "uniform"
 
+        #deklare variables
         pd = nothing
         c_i = 0
         c_j = 0
@@ -132,6 +133,8 @@ function (visualization_callback::ParaviewCatalystCallback)(integrator)
         dx = 0
         dy = 0
         dz = 0
+
+        #get the data to be plotted via a PlotData function corresponding to the dimension. Then determine point count (c_i, c_j, c_k), start values (x0, y0, z0) and step size (dx, dy, dz) for each dimension
         if ndims(mesh) == 1
             pd = PlotData1D(integrator.u, integrator.p)
             c_i = length(pd.x)
@@ -163,6 +166,7 @@ function (visualization_callback::ParaviewCatalystCallback)(integrator)
             dz = min([pd.z[i + 1] - pd.z[i] for i in 1:(c_k - 1)]...)
         end
 
+        #telling catalyst the measurements of the uniform grid
         node["catalyst/channels/input/data/coordsets/coords/dims/i"] = c_i
         node["catalyst/channels/input/data/coordsets/coords/origin/x"] = x0
         node["catalyst/channels/input/data/coordsets/coords/spacing/dx"] = dx
@@ -177,9 +181,11 @@ function (visualization_callback::ParaviewCatalystCallback)(integrator)
             end
         end
 
+        #creating a topology
         node["catalyst/channels/input/data/topologies/mesh/type"] = "uniform"
         node["catalyst/channels/input/data/topologies/mesh/coordset"] = "coords"
 
+        #creating a field for the data from the simulation and passing the data to catalyst
         node["catalyst/channels/input/data/fields/solution/association"] = "vertex"
         node["catalyst/channels/input/data/fields/solution/topology"] = "mesh"
         node["catalyst/channels/input/data/fields/solution/volume_dependent"] = "false"
