@@ -52,7 +52,8 @@ function ParaviewCatalystCallback(; interval = 0,
                                )
     mpi_isparallel() && error("this callback does not work in parallel yet")
 
-    ParaviewCatalyst.catalyst_initialize(libpath="/home/nico/Paraview/ParaView-5.13.0-MPI-Linux-Python3.10-x86_64/lib/catalyst")
+    # ParaviewCatalyst.catalyst_initialize(libpath="/home/nico/Paraview/ParaView-5.13.0-MPI-Linux-Python3.10-x86_64/lib/catalyst")
+    ParaviewCatalyst.catalyst_initialize()
 
     visualization_callback = ParaviewCatalystCallback(interval)
 
