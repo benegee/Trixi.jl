@@ -50,7 +50,7 @@ amr_callback = AMRCallback(semi, amr_controller,
 
 stepsize_callback = StepsizeCallback(cfl = 1.2)
 
-catalyst_callback = ParaviewCatalystCallback(interval=100)
+# catalyst_callback = ParaviewCatalystCallback(interval=100)
 catalyst_callback = ParaviewCatalystCallback(interval=100, catalyst_pipeline= joinpath(@__DIR__, "elixir_advection_amr_catalyst_pipeline.py"))
 
 callbacks = CallbackSet(summary_callback,
