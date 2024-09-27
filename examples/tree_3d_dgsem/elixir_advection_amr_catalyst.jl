@@ -50,7 +50,8 @@ amr_callback = AMRCallback(semi, amr_controller,
 
 stepsize_callback = StepsizeCallback(cfl = 1.2)
 
-catalyst_callback = ParaviewCatalystCallback(interval=100)
+# catalyst_callback = ParaviewCatalystCallback(interval=100)
+catalyst_callback = ParaviewCatalystCallback(interval=100, catalyst_pipeline="/home/nico/treedgsem3damr.py")
 
 callbacks = CallbackSet(summary_callback,
                         analysis_callback,

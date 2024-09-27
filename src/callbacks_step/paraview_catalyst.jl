@@ -48,12 +48,16 @@ visualization*. Make sure to set the PARAVIEW_CATALYST_PATH Environment Variable
 !!! warning "Experimental implementation"
     This is an experimental feature and may change in any future releases.
 """
-function ParaviewCatalystCallback(; interval = 0,
+function ParaviewCatalystCallback(; interval = 0, catalyst_pipeline=nothing
                                )
     mpi_isparallel() && error("this callback does not work in parallel yet")
 
     # ParaviewCatalyst.catalyst_initialize(libpath="/home/nico/Paraview/ParaView-5.13.0-MPI-Linux-Python3.10-x86_64/lib/catalyst")
-    ParaviewCatalyst.catalyst_initialize()
+    if catalyst_pipeline === nothing
+        ParaviewCatalyst.catalyst_initialize()
+    else
+        ParaviewCatalyst.catalyst_initialize(catalyst_pipeline=catalyst_pipeline)
+    end
 
     visualization_callback = ParaviewCatalystCallback(interval)
 
