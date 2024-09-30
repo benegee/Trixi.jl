@@ -178,6 +178,102 @@ function create_conduit_node(integrator, mesh::TreeMesh)
     return node
 end
 
+function create_conduit_node(integrator, mesh::P4estMesh)
+    node = ParaviewCatalyst.ConduitNode()
+    timestep = integrator.stats.naccept
+    node["catalyst/state/timestep"] = timestep
+    node["catalyst/state/time"] = timestep
+    node["catalyst/channels/input/type"] = "mesh"
+    node["catalyst/channels/input/data/coordsets/coords/type"] = "uniform"
+
+    #deklare variables
+    pd = nothing
+    c_i = 0
+    c_j = 0
+    c_k = 0
+    x0 = 0
+    y0 = 0
+    z0 = 0
+    dx = 0
+    dy = 0
+    dz = 0
+
+    #get the data to be plotted via a PlotData function corresponding to the dimension. Then determine point count (c_i, c_j, c_k), start values (x0, y0, z0) and step size (dx, dy, dz) for each dimension
+    if ndims(mesh) == 1
+        pd = PlotData1D(integrator.u, integrator.p)
+        c_i = length(pd.x)
+        x0 = min(pd.x...)
+        uniq_ind = unique(i -> pd.x[i], eachindex(pd.x))  # indices of unique elements in pd.x
+        dx = min([pd.x[uniq_ind[i + 1]] - pd.x[uniq_ind[i]] for i in 1:(length(uniq_ind) - 1)]...)
+    elseif ndims(mesh) == 2
+        pd = PlotData2D(integrator.u, integrator.p)
+        println()
+        println(pd.x)
+        println()
+        println(pd.y)
+        println()
+        c_i = length(pd.x)
+        x0 = min(pd.x...)
+        dx = min([pd.x[i + 1] - pd.x[i] for i in 1:(c_i - 1)]...)
+
+        c_j = length(pd.y)
+        y0 = min(pd.y...)
+        dy = min([pd.y[i + 1] - pd.y[i] for i in 1:(c_j - 1)]...)
+    elseif ndims(mesh) == 3
+        pd = PlotData3D(integrator.u, integrator.p; grid_lines=false)
+        c_i = length(pd.x)
+        x0 = min(pd.x...)
+        dx = min([pd.x[i + 1] - pd.x[i] for i in 1:(c_i - 1)]...)
+
+        c_j = length(pd.y)
+        y0 = min(pd.y...)
+        dy = min([pd.y[i + 1] - pd.y[i] for i in 1:(c_j - 1)]...)
+
+        c_k = length(pd.z)
+        z0 = min(pd.z...)
+        dz = min([pd.z[i + 1] - pd.z[i] for i in 1:(c_k - 1)]...)
+    end
+
+    #telling catalyst the measurements of the uniform grid
+    node["catalyst/channels/input/data/coordsets/coords/dims/i"] = c_i
+    node["catalyst/channels/input/data/coordsets/coords/origin/x"] = x0
+    node["catalyst/channels/input/data/coordsets/coords/spacing/dx"] = dx
+    if ndims(mesh) > 1
+        node["catalyst/channels/input/data/coordsets/coords/dims/j"] = c_j
+        node["catalyst/channels/input/data/coordsets/coords/origin/y"] = y0
+        node["catalyst/channels/input/data/coordsets/coords/spacing/dy"] = dy
+        if ndims(mesh) > 2
+            node["catalyst/channels/input/data/coordsets/coords/dims/k"] = c_k
+            node["catalyst/channels/input/data/coordsets/coords/origin/z"] = z0
+            node["catalyst/channels/input/data/coordsets/coords/spacing/dz"] = dz
+        end
+    end
+
+    #creating a topology
+    node["catalyst/channels/input/data/topologies/mesh/type"] = "uniform"
+    node["catalyst/channels/input/data/topologies/mesh/coordset"] = "coords"
+
+    #creating a field for the data from the simulation and passing the data to catalyst
+    node["catalyst/channels/input/data/fields/solution/association"] = "vertex"
+    node["catalyst/channels/input/data/fields/solution/topology"] = "mesh"
+    node["catalyst/channels/input/data/fields/solution/volume_dependent"] = "false"
+    if ndims(mesh) == 1
+        node["catalyst/channels/input/data/fields/solution/values"] = pd.data
+    elseif ndims(mesh) == 2
+        println()
+        println(pd)
+        println()
+        println(pd.data[1])
+        println()
+        println(vec(pd.data[1]))
+        println()
+        node["catalyst/channels/input/data/fields/solution/values"] = vec(pd.data[1])
+    elseif ndims(mesh) == 3
+        node["catalyst/channels/input/data/fields/solution/values"] = vec(pd.data[1])
+    end
+    return node
+end
+
 # this method is called when the callback is activated
 function (visualization_callback::ParaviewCatalystCallback)(integrator)
     u_ode = integrator.u
