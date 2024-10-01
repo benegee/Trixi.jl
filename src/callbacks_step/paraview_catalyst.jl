@@ -186,68 +186,12 @@ function create_conduit_node(integrator, mesh::P4estMesh)
     node["catalyst/channels/input/type"] = "mesh"
     node["catalyst/channels/input/data/coordsets/coords/type"] = "uniform"
 
-    #deklare variables
-    pd = nothing
-    c_i = 0
-    c_j = 0
-    c_k = 0
-    x0 = 0
-    y0 = 0
-    z0 = 0
-    dx = 0
-    dy = 0
-    dz = 0
-
-    #get the data to be plotted via a PlotData function corresponding to the dimension. Then determine point count (c_i, c_j, c_k), start values (x0, y0, z0) and step size (dx, dy, dz) for each dimension
-    if ndims(mesh) == 1
-        pd = PlotData1D(integrator.u, integrator.p)
-        c_i = length(pd.x)
-        x0 = min(pd.x...)
-        uniq_ind = unique(i -> pd.x[i], eachindex(pd.x))  # indices of unique elements in pd.x
-        dx = min([pd.x[uniq_ind[i + 1]] - pd.x[uniq_ind[i]] for i in 1:(length(uniq_ind) - 1)]...)
-    elseif ndims(mesh) == 2
-        pd = PlotData2D(integrator.u, integrator.p)
-        println()
-        println(pd.x)
-        println()
-        println(pd.y)
-        println()
-        c_i = length(pd.x)
-        x0 = min(pd.x...)
-        dx = min([pd.x[i + 1] - pd.x[i] for i in 1:(c_i - 1)]...)
-
-        c_j = length(pd.y)
-        y0 = min(pd.y...)
-        dy = min([pd.y[i + 1] - pd.y[i] for i in 1:(c_j - 1)]...)
-    elseif ndims(mesh) == 3
-        pd = PlotData3D(integrator.u, integrator.p; grid_lines=false)
-        c_i = length(pd.x)
-        x0 = min(pd.x...)
-        dx = min([pd.x[i + 1] - pd.x[i] for i in 1:(c_i - 1)]...)
-
-        c_j = length(pd.y)
-        y0 = min(pd.y...)
-        dy = min([pd.y[i + 1] - pd.y[i] for i in 1:(c_j - 1)]...)
-
-        c_k = length(pd.z)
-        z0 = min(pd.z...)
-        dz = min([pd.z[i + 1] - pd.z[i] for i in 1:(c_k - 1)]...)
-    end
-
-    #telling catalyst the measurements of the uniform grid
-    node["catalyst/channels/input/data/coordsets/coords/dims/i"] = c_i
-    node["catalyst/channels/input/data/coordsets/coords/origin/x"] = x0
-    node["catalyst/channels/input/data/coordsets/coords/spacing/dx"] = dx
-    if ndims(mesh) > 1
-        node["catalyst/channels/input/data/coordsets/coords/dims/j"] = c_j
-        node["catalyst/channels/input/data/coordsets/coords/origin/y"] = y0
-        node["catalyst/channels/input/data/coordsets/coords/spacing/dy"] = dy
-        if ndims(mesh) > 2
-            node["catalyst/channels/input/data/coordsets/coords/dims/k"] = c_k
-            node["catalyst/channels/input/data/coordsets/coords/origin/z"] = z0
-            node["catalyst/channels/input/data/coordsets/coords/spacing/dz"] = dz
-        end
-    end
+    vtk_points, vtk_cells = calc_vtk_points_cells(mesh.tree_node_coordinates)
+    println()
+    println(vtk_points)
+    println()
+    println(vtk_cells)
+    println()
 
     #creating a topology
     node["catalyst/channels/input/data/topologies/mesh/type"] = "uniform"
@@ -297,5 +241,98 @@ function (visualization_callback::ParaviewCatalystCallback)(integrator)
 
     return nothing
 end
+
+# Copy from Trixi2Vtk
+# Convert coordinates and level information to a list of points and VTK cells for `StructuredMesh` (2D version)
+function calc_vtk_points_cells(node_coordinates::AbstractArray{<:Any,4})
+    n_elements = size(node_coordinates, 4)
+    size_ = size(node_coordinates)
+    n_points = prod(size_[2:end])
+    # Linear indices to access points by node indices and element id
+    linear_indices = LinearIndices(size_[2:end])
+  
+    # Use lagrange nodes as VTK points
+    vtk_points = reshape(node_coordinates, (2, n_points))
+    vtk_cells = Vector{Vector{Float64}}(undef, n_elements)
+  
+    # Create cell for each element
+    for element in 1:n_elements
+      vertices = [linear_indices[1, 1, element],
+                  linear_indices[end, 1, element],
+                  linear_indices[end, end, element],
+                  linear_indices[1, end, element]]
+  
+      edges = vcat(linear_indices[2:end-1, 1, element],
+                   linear_indices[end, 2:end-1, element],
+                   linear_indices[2:end-1, end, element],
+                   linear_indices[1, 2:end-1, element])
+  
+      faces = vec(linear_indices[2:end-1, 2:end-1, element])
+  
+      point_ids = vcat(vertices, edges, faces)
+      vtk_cells[element] = node_coordinates[point_ids]
+    end
+  
+    return vtk_points, vtk_cells
+  end
+
+# Copy from Trixi2Vtk
+# Convert coordinates and level information to a list of points and VTK cells for `StructuredMesh` (3D version)
+function calc_vtk_points_cells(node_coordinates::AbstractArray{<:Any,5})
+    n_elements = size(node_coordinates, 5)
+    size_ = size(node_coordinates)
+    n_points = prod(size_[2:end])
+    # Linear indices to access points by node indices and element id
+    linear_indices = LinearIndices(size_[2:end])
+  
+    # Use lagrange nodes as VTK points
+    vtk_points = reshape(node_coordinates, (3, n_points))
+    vtk_cells = Vector{Vector{Float64}}(undef, n_elements)
+  
+    # Create cell for each element
+    for element in 1:n_elements
+      vertices = [linear_indices[1, 1, 1, element],
+                  linear_indices[end, 1, 1, element],
+                  linear_indices[end, end, 1, element],
+                  linear_indices[1, end, 1, element],
+                  linear_indices[1, 1, end, element],
+                  linear_indices[end, 1, end, element],
+                  linear_indices[end, end, end, element],
+                  linear_indices[1, end, end, element]]
+  
+      # This order doesn't make any sense. This is completely different
+      # from what is shown in
+      # https://blog.kitware.com/wp-content/uploads/2018/09/Source_Issue_43.pdf
+      # but this is the way it works.
+      edges = vcat(linear_indices[2:end-1, 1, 1, element],
+                   linear_indices[end, 2:end-1, 1, element],
+                   linear_indices[2:end-1, end, 1, element],
+                   linear_indices[1, 2:end-1, 1, element],
+                   linear_indices[2:end-1, 1, end, element],
+                   linear_indices[end, 2:end-1, end, element],
+                   linear_indices[2:end-1, end, end, element],
+                   linear_indices[1, 2:end-1, end, element],
+                   linear_indices[1, 1, 2:end-1, element],
+                   linear_indices[end, 1, 2:end-1, element],
+                   linear_indices[1, end, 2:end-1, element],
+                   linear_indices[end, end, 2:end-1, element])
+  
+      # See above
+      faces = vcat(vec(linear_indices[1, 2:end-1, 2:end-1, element]),
+                   vec(linear_indices[end, 2:end-1, 2:end-1, element]),
+                   vec(linear_indices[2:end-1, 1, 2:end-1, element]),
+                   vec(linear_indices[2:end-1, end, 2:end-1, element]),
+                   vec(linear_indices[2:end-1, 2:end-1, 1, element]),
+                   vec(linear_indices[2:end-1, 2:end-1, end, element]))
+  
+      volume = vec(linear_indices[2:end-1, 2:end-1, 2:end-1, element])
+  
+      point_ids = vcat(vertices, edges, faces, volume)
+      vtk_cells[element] = node_coordinates[point_ids]
+    end
+  
+    return vtk_points, vtk_cells
+end
+  
 
 end # @muladd
