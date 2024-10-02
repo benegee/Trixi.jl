@@ -17,7 +17,7 @@ solver = DGSEM(polydeg = 3, surface_flux = flux_lax_friedrichs)
 coordinates_min = (-1.0, -1.0) # minimum coordinates (min(x), min(y))
 coordinates_max = (1.0, 1.0) # maximum coordinates (max(x), max(y))
 
-trees_per_dimension = (8, 8)
+trees_per_dimension = (1, 1)
 
 # Create P4estMesh with 8 x 8 trees and 16 x 16 elements
 mesh = P4estMesh(trees_per_dimension, polydeg = 3,
