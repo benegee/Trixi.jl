@@ -221,13 +221,17 @@ function create_conduit_node(integrator, mesh::P4estMesh, solver)
     node["catalyst/channels/input/data/topologies/mesh/coordset"] = "coords"
     node["catalyst/channels/input/data/topologies/mesh/elements/shape"] = (ndims_ == 2) ? "quad" : "hex"
     if ndims(mesh) == 2
+        #The array in the form of [[tree1_Cell1_lower_left_corner, tree1_Cell1_upper_left_corner, tree1_Cell1_upper_right_corner, tree1_Cell1_lower_right_corner], ... (iterating first over cells, then trees)]
+        #gets reshaped to a 1D Array
         node["catalyst/channels/input/data/topologies/mesh/elements/connectivity"] = reshape(vcat([
-            [(c_tr * gsy) + (c_y * gsx) + c_x
-            (c_tr * gsy) + ((c_y + 1) * gsx) + c_x
-            (c_tr * gsy) + ((c_y + 1) * gsx) + c_x + 1
-            (c_tr * gsy) + (c_y * gsx) + c_x + 1]
-            for c_x in 0:(gsx - 1) for c_y in 0:(gsy - 1) for c_tr in 0:(gstr - 1)]...), :)
+            [(c_tr * gsy * gsx) + (c_y * gsx) + c_x
+            (c_tr * gsy * gsx) + ((c_y + 1) * gsx) + c_x
+            (c_tr * gsy * gsx) + ((c_y + 1) * gsx) + c_x + 1
+            (c_tr * gsy * gsx) + (c_y * gsx) + c_x + 1]
+            for c_x in 0:(gsx - 2) for c_y in 0:(gsy - 2) for c_tr in 0:(gstr - 1)]...), :)
     else
+        #The array in the form of [[tree1_Cell1_lower_left_front_corner, tree1_Cell1_lower_right_front_corner, tree1_Cell1_upper_right_front_corner, tree1_Cell1_upper_left_front_corner, tree1_Cell1_lower_left_back_corner, tree1_Cell1_lower_right_back_corner, tree1_Cell1_upper_right_back_corner, tree1_Cell1_upper_left_back_corner], ... (iterating first over cells, then trees)]
+        #gets reshaped to a 1D Array
         node["catalyst/channels/input/data/topologies/mesh/elements/connectivity"] = reshape(vcat([
             [(c_tr * gsz * gsy * gsx) + (c_z * gsy * gsx) + (c_y * gsx) + c_x
             (c_tr * gsz * gsy * gsx) + (c_z * gsy * gsx) + (c_y * gsx) + c_x + 1
@@ -237,7 +241,7 @@ function create_conduit_node(integrator, mesh::P4estMesh, solver)
             (c_tr * gsz * gsy * gsx) + ((c_z + 1) * gsy * gsx) + (c_y * gsx) + c_x + 1
             (c_tr * gsz * gsy * gsx) + ((c_z + 1) * gsy * gsx) + ((c_y + 1) * gsx) + c_x + 1
             (c_tr * gsz * gsy * gsx) + ((c_z + 1) * gsy * gsx) + ((c_y + 1) * gsx) + c_x]
-            for c_x in 0:(gsx - 1) for c_y in 0:(gsy - 1) for c_z in 0:(gsz - 1) for c_tr in 0:(gstr - 1)]...), :)
+            for c_x in 0:(gsx - 2) for c_y in 0:(gsy - 2) for c_z in 0:(gsz - 2) for c_tr in 0:(gstr - 1)]...), :)
     end
     #creating a field for the data from the simulation and passing the data to catalyst
     node["catalyst/channels/input/data/fields/solution/association"] = "vertex"
