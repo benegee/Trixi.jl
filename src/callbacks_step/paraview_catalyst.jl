@@ -93,7 +93,7 @@ function (visualization_callback::ParaviewCatalystCallback)(u, t, integrator)
             isfinished(integrator))
 end
 
-function create_conduit_node(integrator, mesh::TreeMesh, solver)
+function create_conduit_node(integrator, mesh::TreeMesh, equations, solver, cache)
     node = ParaviewCatalyst.ConduitNode()
     timestep = integrator.stats.naccept
     node["catalyst/state/timestep"] = timestep
@@ -179,7 +179,7 @@ function create_conduit_node(integrator, mesh::TreeMesh, solver)
     return node
 end
 
-function create_conduit_node(integrator, mesh::P4estMesh, solver)
+function create_conduit_node(integrator, mesh::P4estMesh, equations, solver, cache)
     node = ParaviewCatalyst.ConduitNode()
     timestep = integrator.stats.naccept
     node["catalyst/state/timestep"] = timestep
@@ -187,15 +187,27 @@ function create_conduit_node(integrator, mesh::P4estMesh, solver)
     node["catalyst/channels/input/type"] = "mesh"
     node["catalyst/channels/input/data/coordsets/coords/type"] = "explicit"
 
+    solution_variables_ = digest_solution_variables(equations, nothing)
+
+    u = Trixi.wrap_array(integrator.u, integrator.p)
+    # unstructured_data = get_unstructured_data(u, solution_variables_, mesh, equations,
+    # solver, cache)
+    # println()
+    # println(unstructured_data[:, : , : , : , 1])
+    # println(size(unstructured_data))
+    # println()
     ndims_ = ndims(mesh)
     n_visnodes = 2 * nnodes(solver)
     nodes, _ = gauss_lobatto_nodes_weights(n_visnodes)
+    nvars = nvariables(equations)
 
     node_coordinates = Array{Float64, ndims_+2}(undef, ndims_,
                                               ntuple(_ -> n_visnodes, ndims_)...,
                                               Trixi.ncells(mesh))
 
     interpolation_node_coordinates = calc_node_coordinates!(node_coordinates, mesh, nodes)
+    interpolated_data = interpolate_data(u, mesh, 4)
+    data = vec(interpolated_data)
     grid_size = size(interpolation_node_coordinates)
     gsx = grid_size[2]
     gsy = grid_size[3]
@@ -244,13 +256,40 @@ function create_conduit_node(integrator, mesh::P4estMesh, solver)
             for c_x in 0:(gsx - 2) for c_y in 0:(gsy - 2) for c_z in 0:(gsz - 2) for c_tr in 0:(gstr - 1)]...), :)
     end
     #creating a field for the data from the simulation and passing the data to catalyst
+    # node["catalyst/channels/input/data/fields/solution/association"] = "element"
     node["catalyst/channels/input/data/fields/solution/association"] = "vertex"
     node["catalyst/channels/input/data/fields/solution/topology"] = "mesh"
     node["catalyst/channels/input/data/fields/solution/volume_dependent"] = "false"
     if ndims(mesh) == 2
         node["catalyst/channels/input/data/fields/solution/values"] = [sin(i) for i in 1:(size(x)[1])] #TODO: echte DatenS
+        # println()
+        # println("soll:" * string(size(x)[1]) * "(vertex)")
+        # println("soll:" * string(size(reshape(vcat([
+        #     [(c_tr * gsy * gsx) + (c_y * gsx) + c_x
+        #     (c_tr * gsy * gsx) + ((c_y + 1) * gsx) + c_x
+        #     (c_tr * gsy * gsx) + ((c_y + 1) * gsx) + c_x + 1
+        #     (c_tr * gsy * gsx) + (c_y * gsx) + c_x + 1]
+        #     for c_x in 0:(gsx - 2) for c_y in 0:(gsy - 2) for c_tr in 0:(gstr - 1)]...), :))[1]/4) * "(element)")
+        # println(size(data))
+        # println()
+        # node["catalyst/channels/input/data/fields/solution/values"] = data
     else
         node["catalyst/channels/input/data/fields/solution/values"] = [sin(i) for i in 1:(size(x)[1])]
+        # println()
+        # println("soll:" * string(size(x)[1]) * "(vertex)")
+        # println("soll:" * string(size(reshape(vcat([
+        #     [(c_tr * gsz * gsy * gsx) + (c_z * gsy * gsx) + (c_y * gsx) + c_x
+        #     (c_tr * gsz * gsy * gsx) + (c_z * gsy * gsx) + (c_y * gsx) + c_x + 1
+        #     (c_tr * gsz * gsy * gsx) + (c_z * gsy * gsx) + ((c_y + 1) * gsx) + c_x + 1
+        #     (c_tr * gsz * gsy * gsx) + (c_z * gsy * gsx) + ((c_y + 1) * gsx) + c_x
+        #     (c_tr * gsz * gsy * gsx) + ((c_z + 1) * gsy * gsx) + (c_y * gsx) + c_x
+        #     (c_tr * gsz * gsy * gsx) + ((c_z + 1) * gsy * gsx) + (c_y * gsx) + c_x + 1
+        #     (c_tr * gsz * gsy * gsx) + ((c_z + 1) * gsy * gsx) + ((c_y + 1) * gsx) + c_x + 1
+        #     (c_tr * gsz * gsy * gsx) + ((c_z + 1) * gsy * gsx) + ((c_y + 1) * gsx) + c_x]
+        #     for c_x in 0:(gsx - 2) for c_y in 0:(gsy - 2) for c_z in 0:(gsz - 2) for c_tr in 0:(gstr - 1)]...), :))[1]/8) * "(element)")
+        # println(size(data))
+        # println()
+        # node["catalyst/channels/input/data/fields/solution/values"] = data
     end
     return node
 end
@@ -274,9 +313,135 @@ function (visualization_callback::ParaviewCatalystCallback)(integrator)
     # Conduit.node_info(node) do info_node
     #    Conduit.node_print(info_node, detailed = true)
     # end
-    ParaviewCatalyst.catalyst_execute(create_conduit_node(integrator, mesh, solver))
+    ParaviewCatalyst.catalyst_execute(create_conduit_node(integrator, mesh, equations, solver, cache))
 
     return nothing
 end 
+
+#Stolen Code from Trixi2Vtk
+
+# Interpolate data from input format to desired output format (StructuredMesh or UnstructuredMesh2D version)
+function interpolate_data(input_data,
+    mesh::Union{StructuredMesh, UnstructuredMesh2D, P4estMesh},
+    n_visnodes)
+    # Calculate equidistant output nodes
+    nodes_out = collect(range(-1, 1, length=n_visnodes))
+
+    return raw2interpolated(input_data, nodes_out)
+end
+
+function raw2interpolated(data_gl::AbstractArray{Float64}, nodes_out)
+    # Extract number of spatial dimensions
+    ndims_ = ndims(data_gl) - 2
+  
+    # Extract data shape information
+    n_nodes_in = size(data_gl, 1)
+    n_nodes_out = length(nodes_out)
+    n_elements = size(data_gl, ndims_ + 1)
+    n_variables = size(data_gl, ndims_ + 2)
+  
+    # Get node coordinates for DG locations on reference element
+    nodes_in, _ = gauss_lobatto_nodes_weights(n_nodes_in)
+  
+    # Calculate Vandermonde matrix
+    vandermonde = polynomial_interpolation_matrix(nodes_in, nodes_out)
+  
+    if ndims_ == 2
+      # Create output data structure
+      data_vis = Array{Float64}(undef, n_nodes_out, n_nodes_out, n_elements, n_variables)
+  
+      # For each variable, interpolate element data and store to global data structure
+      for v in 1:n_variables
+        # Reshape data array for use in interpolate_nodes function
+        @views reshaped_data = reshape(data_gl[:, :, :, v], 1, n_nodes_in, n_nodes_in, n_elements)
+  
+        # Interpolate data to visualization nodes
+        for element_id in 1:n_elements
+          @views data_vis[:, :, element_id, v] .= reshape(
+              interpolate_nodes(reshaped_data[:, :, :, element_id], vandermonde, 1),
+              n_nodes_out, n_nodes_out)
+        end
+      end
+    elseif ndims_ == 3
+      # Create output data structure
+      data_vis = Array{Float64}(undef, n_nodes_out, n_nodes_out, n_nodes_out, n_elements, n_variables)
+  
+      # For each variable, interpolate element data and store to global data structure
+      for v in 1:n_variables
+        # Reshape data array for use in interpolate_nodes function
+        @views reshaped_data = reshape(data_gl[:, :, :, :, v],
+                                       1, n_nodes_in, n_nodes_in, n_nodes_in, n_elements)
+  
+        # Interpolate data to visualization nodes
+        for element_id in 1:n_elements
+          @views data_vis[:, :, :, element_id, v] .= reshape(
+              interpolate_nodes(reshaped_data[:, :, :, :, element_id], vandermonde, 1),
+              n_nodes_out, n_nodes_out, n_nodes_out)
+        end
+      end
+    else
+      error("Unsupported number of spatial dimensions: ", ndims_)
+    end
+  
+    # Return as one 1D array for each variable
+    return reshape(data_vis, n_nodes_out^ndims_ * n_elements, n_variables)
+end
+
+# Interpolate data using the given Vandermonde matrix and return interpolated values (3D version).
+function interpolate_nodes(data_in::AbstractArray{T, 4},
+    vandermonde, n_vars) where T
+    n_nodes_out = size(vandermonde, 1)
+    data_out = zeros(eltype(data_in), n_vars, n_nodes_out, n_nodes_out, n_nodes_out)
+    interpolate_nodes!(data_out, data_in, vandermonde, n_vars)
+end
+
+function interpolate_nodes!(data_out::AbstractArray{T, 4}, data_in::AbstractArray{T, 4},
+    vandermonde, n_vars) where T
+    n_nodes_out = size(vandermonde, 1)
+    n_nodes_in  = size(vandermonde, 2)
+
+    for k in 1:n_nodes_out, j in 1:n_nodes_out, i in 1:n_nodes_out
+        for v in 1:n_vars
+            acc = zero(eltype(data_out))
+            for kk in 1:n_nodes_in, jj in 1:n_nodes_in, ii in 1:n_nodes_in
+                acc += vandermonde[i, ii] * vandermonde[j, jj] * vandermonde[k, kk] * data_in[v, ii, jj, kk]    
+            end
+            data_out[v, i, j, k] = acc
+        end
+    end
+
+    return data_out
+end
+
+# Interpolate data using the given Vandermonde matrix and return interpolated values (2D version).
+function interpolate_nodes(data_in::AbstractArray{T, 3},
+    vandermonde, n_vars) where T
+    n_nodes_out = size(vandermonde, 1)
+    data_out = zeros(eltype(data_in), n_vars, n_nodes_out, n_nodes_out)
+    interpolate_nodes!(data_out, data_in, vandermonde, n_vars)
+end
+
+
+function interpolate_nodes!(data_out::AbstractArray{T, 3}, data_in::AbstractArray{T, 3},
+     vandermonde, n_vars) where T
+    n_nodes_out = size(vandermonde, 1)
+    n_nodes_in  = size(vandermonde, 2)
+
+    for j in 1:n_nodes_out
+        for i in 1:n_nodes_out
+            for v in 1:n_vars
+                acc = zero(eltype(data_out))
+                for jj in 1:n_nodes_in
+                    for ii in 1:n_nodes_in
+                        acc += vandermonde[i, ii] * data_in[v, ii, jj] * vandermonde[j, jj]
+                    end
+                end
+                data_out[v, i, j] = acc
+            end
+        end
+    end
+
+    return data_out
+end
 
 end # @muladd
