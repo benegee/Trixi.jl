@@ -15,21 +15,6 @@ mkdir(outdir)
 @testset "T8codeMesh2D" begin
 #! format: noindent
 
-@trixi_testset "test save_mesh_file" begin
-    @test_throws Exception begin
-        # Save mesh file support will be added in the future. The following
-        # lines of code are here for satisfying code coverage.
-
-        # Create dummy mesh.
-        mesh = T8codeMesh((1, 1), polydeg = 1,
-                          mapping = Trixi.coordinates2mapping((-1.0, -1.0), (1.0, 1.0)),
-                          initial_refinement_level = 1)
-
-        # This call throws an error.
-        Trixi.save_mesh_file(mesh, "dummy")
-    end
-end
-
 @trixi_testset "test load mesh from path" begin
     mktempdir() do path
         @test_throws "Unknown file extension: .unknown_ext" begin
@@ -142,6 +127,42 @@ end
                         l2=[4.949660644033807e-5],
                         linf=[0.0004867846262313763],
                         coverage_override=(maxiters = 6,))
+    # Ensure that we do not have excessive memory allocations
+    # (e.g., from type instabilities)
+    let
+        t = sol.t[end]
+        u_ode = sol.u[end]
+        du_ode = similar(u_ode)
+        @test (@allocated Trixi.rhs!(du_ode, u_ode, semi, t)) < 1000
+    end
+end
+
+@trixi_testset "elixir_advection_restart.jl" begin
+    @test_trixi_include(joinpath(EXAMPLES_DIR, "elixir_advection_restart.jl"),
+                        l2=[4.507575525876275e-6],
+                        linf=[6.21489667023134e-5],
+                        # With the default `maxiters = 1` in coverage tests,
+                        # there would be no time steps after the restart.
+                        coverage_override=(maxiters = 100_000,))
+
+    # Ensure that we do not have excessive memory allocations
+    # (e.g., from type instabilities)
+    let
+        t = sol.t[end]
+        u_ode = sol.u[end]
+        du_ode = similar(u_ode)
+        @test (@allocated Trixi.rhs!(du_ode, u_ode, semi, t)) < 1000
+    end
+end
+
+@trixi_testset "elixir_advection_restart_amr.jl" begin
+    # This test is identical to the one in `test_p4est_2d.jl`.
+    @test_trixi_include(joinpath(EXAMPLES_DIR, "elixir_advection_restart_amr.jl"),
+                        l2=[2.869137983727866e-6],
+                        linf=[3.8353423270964804e-5],
+                        # With the default `maxiters = 1` in coverage tests,
+                        # there would be no time steps after the restart.
+                        coverage_override=(maxiters = 25,))
     # Ensure that we do not have excessive memory allocations
     # (e.g., from type instabilities)
     let
@@ -305,16 +326,17 @@ end
     # This test is identical to the one in `test_p4est_2d.jl` besides minor
     # deviations in the expected error norms.
     @test_trixi_include(joinpath(EXAMPLES_DIR, "elixir_mhd_rotor.jl"),
-                        l2=[0.44207324634847545, 0.8804644301177857, 0.8262542320669426,
+                        l2=[0.4420732463420727, 0.8804644301158163, 0.8262542320734158,
                             0.0,
-                            0.9615023124189027, 0.10386709616755131, 0.1540308191628843,
+                            0.9615023124248694, 0.10386709616933161,
+                            0.15403081916109138,
                             0.0,
-                            2.8350276854372125e-5],
-                        linf=[10.04548675437385, 17.998696852394836, 9.575802136190026,
+                            2.835066224683485e-5],
+                        linf=[10.045486750338348, 17.998696851793447, 9.57580213608948,
                             0.0,
-                            19.431290746184473, 1.3821685018474321, 1.8186235976551453,
+                            19.431290734386764, 1.3821685025605288, 1.8186235976086789,
                             0.0,
-                            0.002309422702635547],
+                            0.0023118793481168537],
                         tspan=(0.0, 0.02))
     # Ensure that we do not have excessive memory allocations
     # (e.g., from type instabilities)
