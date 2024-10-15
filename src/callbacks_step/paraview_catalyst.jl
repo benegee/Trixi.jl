@@ -7,6 +7,7 @@
 
 mutable struct ParaviewCatalystCallback
     interval::Int
+    nvisnodes
 end
 
 function Base.show(io::IO,
@@ -48,7 +49,7 @@ visualization*. Make sure to set the PARAVIEW_CATALYST_PATH Environment Variable
 !!! warning "Experimental implementation"
     This is an experimental feature and may change in any future releases.
 """
-function ParaviewCatalystCallback(; interval = 0, catalyst_pipeline=nothing
+function ParaviewCatalystCallback(; interval = 0, nvisnodes = nothing, catalyst_pipeline = nothing
                                )
     mpi_isparallel() && error("this callback does not work in parallel yet")
 
@@ -59,7 +60,7 @@ function ParaviewCatalystCallback(; interval = 0, catalyst_pipeline=nothing
         ParaviewCatalyst.catalyst_initialize(catalyst_pipeline=catalyst_pipeline)
     end
 
-    visualization_callback = ParaviewCatalystCallback(interval)
+    visualization_callback = ParaviewCatalystCallback(interval, nvisnodes)
 
     # Warn users if they create a ParaviewCatalystCallback without having loaded the ParaviewCatalyst package
     if !(:ParaviewCatalyst in nameof.(Base.loaded_modules |> values))
@@ -93,7 +94,9 @@ function (visualization_callback::ParaviewCatalystCallback)(u, t, integrator)
             isfinished(integrator))
 end
 
-function create_conduit_node(integrator, mesh::TreeMesh, equations, solver, cache)
+function create_conduit_node(integrator, mesh::TreeMesh, equations, solver, caches, nvisnodes)
+    nvars = nvariables(equations)
+    varnames = Trixi.varnames(cons2prim, equations)
     node = ParaviewCatalyst.ConduitNode()
     timestep = integrator.stats.naccept
     node["catalyst/state/timestep"] = timestep
@@ -115,13 +118,13 @@ function create_conduit_node(integrator, mesh::TreeMesh, equations, solver, cach
 
     #get the data to be plotted via a PlotData function corresponding to the dimension. Then determine point count (c_i, c_j, c_k), start values (x0, y0, z0) and step size (dx, dy, dz) for each dimension
     if ndims(mesh) == 1
-        pd = PlotData1D(integrator.u, integrator.p)
+        pd = PlotData1D(integrator.u, integrator.p, nvisnodes=nvisnodes)
         c_i = length(pd.x)
         x0 = min(pd.x...)
         uniq_ind = unique(i -> pd.x[i], eachindex(pd.x))  # indices of unique elements in pd.x
         dx = min([pd.x[uniq_ind[i + 1]] - pd.x[uniq_ind[i]] for i in 1:(length(uniq_ind) - 1)]...)
     elseif ndims(mesh) == 2
-        pd = PlotData2D(integrator.u, integrator.p)
+        pd = PlotData2D(integrator.u, integrator.p, nvisnodes=nvisnodes)
         
         c_i = length(pd.x)
         x0 = min(pd.x...)
@@ -131,7 +134,7 @@ function create_conduit_node(integrator, mesh::TreeMesh, equations, solver, cach
         y0 = min(pd.y...)
         dy = min([pd.y[i + 1] - pd.y[i] for i in 1:(c_j - 1)]...)
     elseif ndims(mesh) == 3
-        pd = PlotData3D(integrator.u, integrator.p; grid_lines=false)
+        pd = PlotData3D(integrator.u, integrator.p; grid_lines=false, nvisnodes=nvisnodes)
         c_i = length(pd.x)
         x0 = min(pd.x...)
         dx = min([pd.x[i + 1] - pd.x[i] for i in 1:(c_i - 1)]...)
@@ -165,21 +168,26 @@ function create_conduit_node(integrator, mesh::TreeMesh, equations, solver, cach
     node["catalyst/channels/input/data/topologies/mesh/coordset"] = "coords"
 
     #creating a field for the data from the simulation and passing the data to catalyst
-    node["catalyst/channels/input/data/fields/solution/association"] = "vertex"
-    node["catalyst/channels/input/data/fields/solution/topology"] = "mesh"
-    node["catalyst/channels/input/data/fields/solution/volume_dependent"] = "false"
-    if ndims(mesh) == 1
-        node["catalyst/channels/input/data/fields/solution/values"] = pd.data
-    elseif ndims(mesh) == 2
-        node["catalyst/channels/input/data/fields/solution/values"] = vec(pd.data[1])
-    elseif ndims(mesh) == 3
-        node["catalyst/channels/input/data/fields/solution/values"] = vec(pd.data[1])
+    for i in 1:nvars
+        node["catalyst/channels/input/data/fields/" * varnames[i] * "/association"] = "vertex"
+        node["catalyst/channels/input/data/fields/" * varnames[i] * "/topology"] = "mesh"
+        node["catalyst/channels/input/data/fields/" * varnames[i] * "/volume_dependent"] = "false"
+        if ndims(mesh) == 1
+            node["catalyst/channels/input/data/fields/" * varnames[i] * "/values"] = pd.data[i]
+        elseif ndims(mesh) == 2
+            node["catalyst/channels/input/data/fields/" * varnames[i] * "/values"] = vec(pd.data[i])
+        elseif ndims(mesh) == 3
+            node["catalyst/channels/input/data/fields/" * varnames[i] * "/values"] = vec(pd.data[i])
+        end
     end
     
     return node
 end
 
-function create_conduit_node(integrator, mesh::P4estMesh, equations, solver, cache)
+function create_conduit_node(integrator, mesh::P4estMesh, equations, solver, cache, nvisnodes)
+    nvars = nvariables(equations)
+    varnames = Trixi.varnames(cons2prim, equations)
+
     node = ParaviewCatalyst.ConduitNode()
     timestep = integrator.stats.naccept
     node["catalyst/state/timestep"] = timestep
@@ -190,15 +198,15 @@ function create_conduit_node(integrator, mesh::P4estMesh, equations, solver, cac
     solution_variables_ = digest_solution_variables(equations, nothing)
 
     u = Trixi.wrap_array(integrator.u, integrator.p)
-    # unstructured_data = get_unstructured_data(u, solution_variables_, mesh, equations,
-    # solver, cache)
+    unstructured_data = get_unstructured_data(u, solution_variables_, mesh, equations,
+    solver, cache)
     # println()
     # println(unstructured_data[:, : , : , : , 1])
     # println(size(unstructured_data))
     # println()
     ndims_ = ndims(mesh)
-    n_visnodes = 2 * nnodes(solver)
-    nodes, _ = gauss_lobatto_nodes_weights(n_visnodes)
+    n_visnodes = nvisnodes === nothing ? 2 * nnodes(solver) : nvisnodes
+    nodes = collect(range(-1, 1, length=n_visnodes))
     nvars = nvariables(equations)
 
     node_coordinates = Array{Float64, ndims_+2}(undef, ndims_,
@@ -206,8 +214,8 @@ function create_conduit_node(integrator, mesh::P4estMesh, equations, solver, cac
                                               Trixi.ncells(mesh))
 
     interpolation_node_coordinates = calc_node_coordinates!(node_coordinates, mesh, nodes)
-    interpolated_data = interpolate_data(u, mesh, 4)
-    data = vec(interpolated_data)
+    interpolated_data = raw2interpolated(unstructured_data, nodes)
+    data = [vec(interpolated_data[:, i]) for i in 1:nvars]
     grid_size = size(interpolation_node_coordinates)
     gsx = grid_size[2]
     gsy = grid_size[3]
@@ -256,40 +264,44 @@ function create_conduit_node(integrator, mesh::P4estMesh, equations, solver, cac
             for c_x in 0:(gsx - 2) for c_y in 0:(gsy - 2) for c_z in 0:(gsz - 2) for c_tr in 0:(gstr - 1)]...), :)
     end
     #creating a field for the data from the simulation and passing the data to catalyst
-    # node["catalyst/channels/input/data/fields/solution/association"] = "element"
-    node["catalyst/channels/input/data/fields/solution/association"] = "vertex"
-    node["catalyst/channels/input/data/fields/solution/topology"] = "mesh"
-    node["catalyst/channels/input/data/fields/solution/volume_dependent"] = "false"
-    if ndims(mesh) == 2
-        node["catalyst/channels/input/data/fields/solution/values"] = [sin(i) for i in 1:(size(x)[1])] #TODO: echte DatenS
-        # println()
-        # println("soll:" * string(size(x)[1]) * "(vertex)")
-        # println("soll:" * string(size(reshape(vcat([
-        #     [(c_tr * gsy * gsx) + (c_y * gsx) + c_x
-        #     (c_tr * gsy * gsx) + ((c_y + 1) * gsx) + c_x
-        #     (c_tr * gsy * gsx) + ((c_y + 1) * gsx) + c_x + 1
-        #     (c_tr * gsy * gsx) + (c_y * gsx) + c_x + 1]
-        #     for c_x in 0:(gsx - 2) for c_y in 0:(gsy - 2) for c_tr in 0:(gstr - 1)]...), :))[1]/4) * "(element)")
-        # println(size(data))
-        # println()
-        # node["catalyst/channels/input/data/fields/solution/values"] = data
-    else
-        node["catalyst/channels/input/data/fields/solution/values"] = [sin(i) for i in 1:(size(x)[1])]
-        # println()
-        # println("soll:" * string(size(x)[1]) * "(vertex)")
-        # println("soll:" * string(size(reshape(vcat([
-        #     [(c_tr * gsz * gsy * gsx) + (c_z * gsy * gsx) + (c_y * gsx) + c_x
-        #     (c_tr * gsz * gsy * gsx) + (c_z * gsy * gsx) + (c_y * gsx) + c_x + 1
-        #     (c_tr * gsz * gsy * gsx) + (c_z * gsy * gsx) + ((c_y + 1) * gsx) + c_x + 1
-        #     (c_tr * gsz * gsy * gsx) + (c_z * gsy * gsx) + ((c_y + 1) * gsx) + c_x
-        #     (c_tr * gsz * gsy * gsx) + ((c_z + 1) * gsy * gsx) + (c_y * gsx) + c_x
-        #     (c_tr * gsz * gsy * gsx) + ((c_z + 1) * gsy * gsx) + (c_y * gsx) + c_x + 1
-        #     (c_tr * gsz * gsy * gsx) + ((c_z + 1) * gsy * gsx) + ((c_y + 1) * gsx) + c_x + 1
-        #     (c_tr * gsz * gsy * gsx) + ((c_z + 1) * gsy * gsx) + ((c_y + 1) * gsx) + c_x]
-        #     for c_x in 0:(gsx - 2) for c_y in 0:(gsy - 2) for c_z in 0:(gsz - 2) for c_tr in 0:(gstr - 1)]...), :))[1]/8) * "(element)")
-        # println(size(data))
-        # println()
-        # node["catalyst/channels/input/data/fields/solution/values"] = data
+    for i in 1:nvars
+        # node["catalyst/channels/input/data/fields/solution/association"] = "element"
+        node["catalyst/channels/input/data/fields/" * varnames[i] * "/association"] = "vertex"
+        node["catalyst/channels/input/data/fields/" * varnames[i] * "/topology"] = "mesh"
+        node["catalyst/channels/input/data/fields/" * varnames[i] * "/volume_dependent"] = "false"
+        if ndims(mesh) == 2
+            # node["catalyst/channels/input/data/fields/solution/values"] = [sin(i) for i in 1:(size(x)[1])] #TODO: echte DatenS
+            println()
+            println("soll:" * string(size(x)[1]) * "(vertex)")
+            println("soll:" * string(size(reshape(vcat([
+                [(c_tr * gsy * gsx) + (c_y * gsx) + c_x
+                (c_tr * gsy * gsx) + ((c_y + 1) * gsx) + c_x
+                (c_tr * gsy * gsx) + ((c_y + 1) * gsx) + c_x + 1
+                (c_tr * gsy * gsx) + (c_y * gsx) + c_x + 1]
+                for c_x in 0:(gsx - 2) for c_y in 0:(gsy - 2) for c_tr in 0:(gstr - 1)]...), :))[1]/4) * "(element)")
+            println(size(data[i]))
+            println()
+            node["catalyst/channels/input/data/fields/" * varnames[i] * "/values"] = data[i]
+            # node["catalyst/channels/input/data/fields/" * varnames[i] * "/values"] = vec(unstructured_data[i])
+        else
+            # node["catalyst/channels/input/data/fields/" * varnames[i] * "/values"] = [sin(i) for i in 1:(size(x)[1])]
+            println()
+            println("soll:" * string(size(x)[1]) * "(vertex)")
+            println("soll:" * string(size(reshape(vcat([
+                [(c_tr * gsz * gsy * gsx) + (c_z * gsy * gsx) + (c_y * gsx) + c_x
+                (c_tr * gsz * gsy * gsx) + (c_z * gsy * gsx) + (c_y * gsx) + c_x + 1
+                (c_tr * gsz * gsy * gsx) + (c_z * gsy * gsx) + ((c_y + 1) * gsx) + c_x + 1
+                (c_tr * gsz * gsy * gsx) + (c_z * gsy * gsx) + ((c_y + 1) * gsx) + c_x
+                (c_tr * gsz * gsy * gsx) + ((c_z + 1) * gsy * gsx) + (c_y * gsx) + c_x
+                (c_tr * gsz * gsy * gsx) + ((c_z + 1) * gsy * gsx) + (c_y * gsx) + c_x + 1
+                (c_tr * gsz * gsy * gsx) + ((c_z + 1) * gsy * gsx) + ((c_y + 1) * gsx) + c_x + 1
+                (c_tr * gsz * gsy * gsx) + ((c_z + 1) * gsy * gsx) + ((c_y + 1) * gsx) + c_x]
+                for c_x in 0:(gsx - 2) for c_y in 0:(gsy - 2) for c_z in 0:(gsz - 2) for c_tr in 0:(gstr - 1)]...), :))[1]/8) * "(element)")
+            println(size(data[i]))
+            println()
+            node["catalyst/channels/input/data/fields/" * varnames[i] * "/values"] = data[i]
+            # node["catalyst/channels/input/data/fields/" * varnames[i] * "/values"] = vec(unstructured_data[i])
+        end
     end
     return node
 end
@@ -313,22 +325,12 @@ function (visualization_callback::ParaviewCatalystCallback)(integrator)
     # Conduit.node_info(node) do info_node
     #    Conduit.node_print(info_node, detailed = true)
     # end
-    ParaviewCatalyst.catalyst_execute(create_conduit_node(integrator, mesh, equations, solver, cache))
+    ParaviewCatalyst.catalyst_execute(create_conduit_node(integrator, mesh, equations, solver, cache, visualization_callback.nvisnodes))
 
     return nothing
 end 
 
 #Stolen Code from Trixi2Vtk
-
-# Interpolate data from input format to desired output format (StructuredMesh or UnstructuredMesh2D version)
-function interpolate_data(input_data,
-    mesh::Union{StructuredMesh, UnstructuredMesh2D, P4estMesh},
-    n_visnodes)
-    # Calculate equidistant output nodes
-    nodes_out = collect(range(-1, 1, length=n_visnodes))
-
-    return raw2interpolated(input_data, nodes_out)
-end
 
 function raw2interpolated(data_gl::AbstractArray{Float64}, nodes_out)
     # Extract number of spatial dimensions
