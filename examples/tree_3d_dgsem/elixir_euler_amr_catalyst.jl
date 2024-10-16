@@ -32,7 +32,7 @@ solver = DGSEM(polydeg = 3, surface_flux = flux_lax_friedrichs)
 coordinates_min = (-5.0, -5.0, -5.0)
 coordinates_max = (5.0, 5.0, 5.0)
 mesh = TreeMesh(coordinates_min, coordinates_max,
-                initial_refinement_level = 4,
+                initial_refinement_level = 1,
                 n_cells_max = 10_000)
 
 semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver)
@@ -60,9 +60,9 @@ save_solution = SaveSolutionCallback(interval = 100,
                                      solution_variables = cons2prim)
 
 amr_controller = ControllerThreeLevel(semi, IndicatorMax(semi, variable = first),
-                                      base_level = 4,
-                                      med_level = 5, med_threshold = 1.05,
-                                      max_level = 6, max_threshold = 1.3)
+                                      base_level = 1,
+                                      med_level = 2, med_threshold = 1.05,
+                                      max_level = 3, max_threshold = 1.3)
 amr_callback = AMRCallback(semi, amr_controller,
                            interval = 5,
                            adapt_initial_condition = true,
