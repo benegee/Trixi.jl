@@ -8,6 +8,7 @@
 mutable struct ParaviewCatalystCallback
     interval::Int
     nvisnodes
+    catalyst_pipeline
 end
 
 function Base.show(io::IO,
@@ -33,6 +34,8 @@ function Base.show(io::IO, ::MIME"text/plain",
 
         setup = [
             "interval" => visualization_callback.interval,
+            "nvisnodes" => visualization_callback.nvisnodes,
+            "catalyst_pipeline" => visualization_callback.catalyst_pipeline,
             
         ]
         summary_box(io, "ParaviewCatalystCallback", setup)
@@ -40,11 +43,13 @@ function Base.show(io::IO, ::MIME"text/plain",
 end
 
 """
-    ParaviewCatalystCallback(; interval=0,
+    ParaviewCatalystCallback(; interval=0, nvisnodes = nothing, catalyst_pipeline = nothing
                             )
 
-Create a callback that visualizes results during a simulation, also known as *in-situ
-visualization*. Make sure to set the PARAVIEW_CATALYST_PATH Environment Variable to the path of the Catalyst lib.
+Create a callback that visualizes results during a simulation using Paraview, also known as *in-situ
+visualization*. Make sure that your downloaded Paraview Installation includes the Catalyst library and
+make sure to set the PARAVIEW_CATALYST_PATH Environment Variable to the path of the Catalyst lib.
+You can also specify a path for a custom catalyst pipeline to be used instead of the default by ParaviewCatalyst.jl
 
 !!! warning "Experimental implementation"
     This is an experimental feature and may change in any future releases.
@@ -60,7 +65,7 @@ function ParaviewCatalystCallback(; interval = 0, nvisnodes = nothing, catalyst_
         ParaviewCatalyst.catalyst_initialize(catalyst_pipeline=catalyst_pipeline)
     end
 
-    visualization_callback = ParaviewCatalystCallback(interval, nvisnodes)
+    visualization_callback = ParaviewCatalystCallback(interval, nvisnodes, catalyst_pipeline)
 
     # Warn users if they create a ParaviewCatalystCallback without having loaded the ParaviewCatalyst package
     if !(:ParaviewCatalyst in nameof.(Base.loaded_modules |> values))
@@ -119,33 +124,39 @@ function create_conduit_node(integrator, mesh::TreeMesh, equations, solver, cach
     #get the data to be plotted via a PlotData function corresponding to the dimension. Then determine point count (c_i, c_j, c_k), start values (x0, y0, z0) and step size (dx, dy, dz) for each dimension
     if ndims(mesh) == 1
         pd = PlotData1D(integrator.u, integrator.p, nvisnodes=nvisnodes)
-        c_i = length(pd.x)
-        x0 = min(pd.x...)
-        uniq_ind = unique(i -> pd.x[i], eachindex(pd.x))  # indices of unique elements in pd.x
-        dx = min([pd.x[uniq_ind[i + 1]] - pd.x[uniq_ind[i]] for i in 1:(length(uniq_ind) - 1)]...)
+        @trixi_timeit timer() "uniform grid generation" begin
+            uniq_ind = unique(i -> pd.x[i], eachindex(pd.x))  # indices of unique elements in pd.x
+            c_i = length(uniq_ind)
+            x0 = pd.x[1]
+            dx = pd.x[uniq_ind[2]] - pd.x[uniq_ind[1]]
+        end
     elseif ndims(mesh) == 2
         pd = PlotData2D(integrator.u, integrator.p, nvisnodes=nvisnodes)
+        @trixi_timeit timer() "uniform grid generation" begin
         
-        c_i = length(pd.x)
-        x0 = min(pd.x...)
-        dx = min([pd.x[i + 1] - pd.x[i] for i in 1:(c_i - 1)]...)
+            c_i = length(pd.x)
+            x0 = pd.x[1]
+            dx = pd.x[2] - pd.x[1]
 
-        c_j = length(pd.y)
-        y0 = min(pd.y...)
-        dy = min([pd.y[i + 1] - pd.y[i] for i in 1:(c_j - 1)]...)
+            c_j = length(pd.y)
+            y0 = pd.y[1]
+            dy = pd.y[2] - pd.y[1]
+        end
     elseif ndims(mesh) == 3
         pd = PlotData3D(integrator.u, integrator.p; grid_lines=false, nvisnodes=nvisnodes)
-        c_i = length(pd.x)
-        x0 = min(pd.x...)
-        dx = min([pd.x[i + 1] - pd.x[i] for i in 1:(c_i - 1)]...)
+        @trixi_timeit timer() "uniform grid generation" begin
+            c_i = length(pd.x)
+            x0 = pd.x[1]
+            dx = pd.x[2] - pd.x[1]
 
-        c_j = length(pd.y)
-        y0 = min(pd.y...)
-        dy = min([pd.y[i + 1] - pd.y[i] for i in 1:(c_j - 1)]...)
+            c_j = length(pd.y)
+            y0 = pd.y[1]
+            dy = min([pd.y[i + 1] - pd.y[i] for i in 1:(c_j - 1)]...)
 
-        c_k = length(pd.z)
-        z0 = min(pd.z...)
-        dz = min([pd.z[i + 1] - pd.z[i] for i in 1:(c_k - 1)]...)
+            c_k = length(pd.z)
+            z0 = pd.z[1]
+            dz = min([pd.z[i + 1] - pd.z[i] for i in 1:(c_k - 1)]...)
+        end
     end
 
     #passing general information to the conduit node
@@ -174,16 +185,18 @@ function create_conduit_node(integrator, mesh::TreeMesh, equations, solver, cach
     node["catalyst/channels/input/data/topologies/mesh/coordset"] = "coords"
 
     #creating a field for the data from the simulation and passing the data to the conduit node
-    for i in 1:nvars
-        node["catalyst/channels/input/data/fields/" * varnames[i] * "/association"] = "vertex"
-        node["catalyst/channels/input/data/fields/" * varnames[i] * "/topology"] = "mesh"
-        node["catalyst/channels/input/data/fields/" * varnames[i] * "/volume_dependent"] = "false"
-        if ndims(mesh) == 1
-            node["catalyst/channels/input/data/fields/" * varnames[i] * "/values"] = pd.data[i]
-        elseif ndims(mesh) == 2
-            node["catalyst/channels/input/data/fields/" * varnames[i] * "/values"] = vec(pd.data[i])
-        elseif ndims(mesh) == 3
-            node["catalyst/channels/input/data/fields/" * varnames[i] * "/values"] = vec(pd.data[i])
+    @trixi_timeit timer() "passing simulation data to conduit node" begin
+        for i in 1:nvars
+            node["catalyst/channels/input/data/fields/" * varnames[i] * "/association"] = "vertex"
+            node["catalyst/channels/input/data/fields/" * varnames[i] * "/topology"] = "mesh"
+            node["catalyst/channels/input/data/fields/" * varnames[i] * "/volume_dependent"] = "false"
+            if ndims(mesh) == 1
+                node["catalyst/channels/input/data/fields/" * varnames[i] * "/values"] = pd.data[i]
+            elseif ndims(mesh) == 2
+                node["catalyst/channels/input/data/fields/" * varnames[i] * "/values"] = vec(pd.data[i])
+            elseif ndims(mesh) == 3
+                node["catalyst/channels/input/data/fields/" * varnames[i] * "/values"] = vec(pd.data[i])
+            end
         end
     end
     
@@ -202,14 +215,17 @@ function create_conduit_node(integrator, mesh::P4estMesh, equations, solver, cac
     varnames = Trixi.varnames(solution_variables_, equations)
     timestep = integrator.stats.naccept
 
-    #node data, location and interpolation
-    nodes = collect(range(-1, 1, length=n_visnodes))
-    node_coordinates = Array{Float64, ndims_+2}(undef, ndims_, ntuple(_ -> n_visnodes, ndims_)..., Trixi.ncells(mesh))
-    interpolation_node_coordinates = calc_node_coordinates!(node_coordinates, mesh, nodes)
-    unstructured_data = get_unstructured_data(Trixi.wrap_array(integrator.u, integrator.p), solution_variables_, mesh, equations, solver, cache)
-    interpolated_data = raw2interpolated(unstructured_data, nodes)
-    data = [vec(interpolated_data[:, i]) for i in 1:nvars]
     
+    #node data, location and interpolation
+    @trixi_timeit timer() "node/data interpolation" begin
+        nodes = collect(range(-1, 1, length=n_visnodes))
+        node_coordinates = Array{Float64, ndims_+2}(undef, ndims_, ntuple(_ -> n_visnodes, ndims_)..., Trixi.ncells(mesh))
+        interpolation_node_coordinates = calc_node_coordinates!(node_coordinates, mesh, nodes)
+        unstructured_data = get_unstructured_data(Trixi.wrap_array(integrator.u, integrator.p), solution_variables_, mesh, equations, solver, cache)
+        interpolated_data = raw2interpolated(unstructured_data, nodes)
+    end
+    data = [vec(interpolated_data[:, i]) for i in 1:nvars]
+
     #information about the topology underneath the data
     grid_size = size(interpolation_node_coordinates)
     gsx = grid_size[2]
