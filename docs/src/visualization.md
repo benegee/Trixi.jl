@@ -399,6 +399,28 @@ below:
   <style>.embed-container { position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; max-width: 100%; } .embed-container iframe, .embed-container object, .embed-container embed { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }</style><div class='embed-container'><iframe src='https://www.youtube-nocookie.com/embed/UZtrqeDY1Fs' frameborder='0' allowfullscreen></iframe></div>
 ```
 
+### Visualizing results during a simulation using Paraview Catalyst
+With a Paraview Installation containing the Catalyst Library, you can use the ParaviewCatalystCallback to visualise your results in Paraview during the simulation.
+
+```julia
+    ParaviewCatalystCallback(; interval=0, nvisnodes = nothing, catalyst_pipeline = nothing)
+```
+
+To be able to use the ParaviewCatalystCallback you need
++ A Paraview Installation containing the Catalyst Library
++ The ParaviewCatalyst.jl Julia package
++ The PARAVIEW_CATALYST_PATH Environment Variable set to the location of the Catalyst Library contained in Paraview
+
+To use the ParaviewCatalystCallback you have to
++ Include ParaviewCatalyst.jl in your julia Script via `using ParaviewCatalyst`
++ Create a ParaviewCatalystCallback and add it to your Callbackset
++ Before running the script:
+  + Open Paraview and press Catalyst->Connect... and use the standard Port of 22222 (if not specified otherwise in the pipeline)
+  + Press Catalyst->Pause Simulation
++ Now start running your Simulation
++ once the first set of values has been calculated and the Simulation pauses
+  + Adjust the view in Paraview to your liking
+  + Press Catalyst->Continue
 
 ## Trixi2Vtk
 Trixi2Vtk converts Trixi.jl's `.h5` output files to VTK files, which can be read
