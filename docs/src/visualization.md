@@ -405,6 +405,26 @@ With a Paraview Installation containing the Catalyst Library, you can use the Pa
 ```julia
     ParaviewCatalystCallback(; interval=0, nvisnodes = nothing, catalyst_pipeline = nothing)
 ```
++ `interval` determines the amount of timesteps between calls of this callback
++ `nvisnodes` determines the number of visualization nodes. 
+  + Paraview can not handle the Polynomials for each grid cell, so an interpolation is neccessary
+  + Visualization nodes are the nodes per dimension in each cell
+    + For example in a 3D Plot each cell has a nxnxn array of visualization nodes
++ `catalyst_pipeline` a path to the catalyst pipeline if the default should not be used
+  + The starting view shown by Paraview is determined by a python pipeline
+  + ParaviewCatalyst.jl includes a standard `catalyst_pipeline.py`
+  + In principle your current view in Paraview can be exported as a pipeline using File->Save Catalyst State...
+  but in practice the resulting pipelines did not work in our testing.
+  ```python
+  def catalyst_execute(info):
+    global input
+    global options
+    input.UpdatePipeline()
+    contour1.UpdatePipeline()
+    SaveExtractsUsingCatalystOptions(options)
+  ```
+  a block like this needed to replace the bottom of the exported pipeline, to get it working for us
+
 
 To be able to use the ParaviewCatalystCallback you need
 + A Paraview Installation containing the Catalyst Library
