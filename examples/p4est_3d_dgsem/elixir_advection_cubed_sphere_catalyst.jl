@@ -46,7 +46,7 @@ save_solution = SaveSolutionCallback(interval = 100,
 # The StepsizeCallback handles the re-calculation of the maximum Δt after each time step
 stepsize_callback = StepsizeCallback(cfl = 1.2)
 
-catalyst_callback = ParaviewCatalystCallback(interval=100)
+catalyst_callback = ParaviewCatalystCallback(interval=100, interpolation=false)
 
 # Create a CallbackSet to collect all callbacks such that they can be passed to the ODE solver
 callbacks = CallbackSet(summary_callback, analysis_callback, save_solution,
