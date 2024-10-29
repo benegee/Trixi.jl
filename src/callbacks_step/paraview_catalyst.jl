@@ -311,84 +311,70 @@ function create_conduit_node_no_interpolation(integrator, mesh::TreeMesh, equati
     leaf_cell_ids = leaf_cells(mesh.tree)
     unstructured_data = get_unstructured_data(Trixi.wrap_array(integrator.u, integrator.p), solution_variables_, mesh, equations, solver, cache)
     coordinates = mesh.tree.coordinates[:, leaf_cell_ids]
+    levels = mesh.tree.levels[leaf_cell_ids]
+    length_level_0 = mesh.tree.length_level_0
+    center_level_0 = mesh.tree.center_level_0
+    max_level = maximum(levels)
+    max_nvisnodes = nnodes(solver)
+    resolution = max_nvisnodes * 2^max_level
+    x = collect(range(-1, 1, length = resolution + 1)) .* length_level_0 / 2 .+
+         center_level_0[1]
+    y = collect(range(-1, 1, length = resolution + 1)) .* length_level_0 / 2 .+
+         center_level_0[2]
+    z = (ndims(mesh) == 3) ? collect(range(-1, 1, length = resolution + 1)) .* length_level_0 / 2 .+
+         center_level_0[3] : nothing
 
-    #declare variables
-    pd = nothing
-    c_i = 0
-    c_j = 0
-    c_k = 0
-    x0 = 0
-    y0 = 0
-    z0 = 0
-    dx = 0
-    dy = 0
-    dz = 0
-
-    #get the data to be plotted via a PlotData function corresponding to the dimension. Then determine point count (c_i, c_j, c_k), start values (x0, y0, z0) and step size (dx, dy, dz) for each dimension
-    if ndims(mesh) == 1
-        @trixi_timeit timer() "uniform grid generation" begin
-            x = coordinates[1, :]
-            uniq_ind = unique(i -> x[i], eachindex(x))  # indices of unique elements in pd.x
-            c_i = length(uniq_ind)
-            x0 = x[1]
-            dx = x[uniq_ind[2]] - x[uniq_ind[1]]
-        end
-    elseif ndims(mesh) == 2
-        x = coordinates[1, :]
-        y = coordinates[2, :]
-        @trixi_timeit timer() "uniform grid generation" begin
-        
-            c_i = floor(Int, length(x)/2)
-            x0 = x[1]
-            dx = x[2] - x[1]
-
-            c_j = floor(Int, length(y)/2)
-            y0 = y[1]
-            dy = y[2] - y[1]
-        end
-    elseif ndims(mesh) == 3
-        x = coordinates[1, :]
-        y = coordinates[2, :]
-        z = coordinates[3, :]
-        @trixi_timeit timer() "uniform grid generation" begin
-            c_i = floor(Int, length(x)/3)
-            x0 = x[1]
-            dx = x[2] - x[1]
-
-            c_j = floor(Int, length(y)/3)
-            y0 = y[1]
-            dy = min([y[i + 1] - y[i] for i in 1:(c_j - 1)]...)
-
-            c_k = floor(Int, length(z)/3)
-            z0 = z[1]
-            dz = min([z[i + 1] - z[i] for i in 1:(c_k - 1)]...)
-        end
-    end
+    #information about the topology underneath the data
+    grid_size = size(unstructured_data)
+    gsx = grid_size[2]
+    gsy = grid_size[3]
+    gsz =(ndims(mesh) == 3) ? grid_size[4] : nothing
+    gstr =(ndims(mesh) == 3) ? grid_size[5] : grid_size[4]
 
     #passing general information to the conduit node
     node["catalyst/state/timestep"] = timestep
     node["catalyst/state/time"] = timestep
     node["catalyst/channels/input/type"] = "mesh"
-    node["catalyst/channels/input/data/coordsets/coords/type"] = "uniform"
+    node["catalyst/channels/input/data/coordsets/coords/type"] = "explicit"
 
-    #telling the conduit node the measurements of the uniform grid
-    node["catalyst/channels/input/data/coordsets/coords/dims/i"] = c_i
-    node["catalyst/channels/input/data/coordsets/coords/origin/x"] = x0
-    node["catalyst/channels/input/data/coordsets/coords/spacing/dx"] = dx
-    if ndims(mesh) > 1
-        node["catalyst/channels/input/data/coordsets/coords/dims/j"] = c_j
-        node["catalyst/channels/input/data/coordsets/coords/origin/y"] = y0
-        node["catalyst/channels/input/data/coordsets/coords/spacing/dy"] = dy
-        if ndims(mesh) > 2
-            node["catalyst/channels/input/data/coordsets/coords/dims/k"] = c_k
-            node["catalyst/channels/input/data/coordsets/coords/origin/z"] = z0
-            node["catalyst/channels/input/data/coordsets/coords/spacing/dz"] = dz
-        end
+    
+    node["catalyst/channels/input/data/coordsets/coords/values/x"] = x
+    node["catalyst/channels/input/data/coordsets/coords/values/y"] = y
+    if ndims(mesh) == 3
+        node["catalyst/channels/input/data/coordsets/coords/values/z"] = z
     end
 
     #creating a topology
-    node["catalyst/channels/input/data/topologies/mesh/type"] = "uniform"
+    node["catalyst/channels/input/data/topologies/mesh/type"] = "unstructured"
     node["catalyst/channels/input/data/topologies/mesh/coordset"] = "coords"
+    node["catalyst/channels/input/data/topologies/mesh/elements/shape"] = (ndims(mesh) == 2) ? "quad" : "hex"
+    if ndims(mesh) == 2
+        #The array in the form of [[tree1_Cell1_lower_left_corner, tree1_Cell1_upper_left_corner, tree1_Cell1_upper_right_corner, tree1_Cell1_lower_right_corner], ... (iterating first over cells, then trees)]
+        #gets reshaped to a 1D Array
+        @trixi_timeit timer() "generating connectivity array" begin
+            node["catalyst/channels/input/data/topologies/mesh/elements/connectivity"] = reshape(vcat([
+                [(c_tr * gsy * gsx) + (c_y * gsx) + c_x
+                (c_tr * gsy * gsx) + ((c_y + 1) * gsx) + c_x
+                (c_tr * gsy * gsx) + ((c_y + 1) * gsx) + c_x + 1
+                (c_tr * gsy * gsx) + (c_y * gsx) + c_x + 1]
+                for c_x in 0:(gsx - 2) for c_y in 0:(gsy - 2) for c_tr in 0:(gstr - 1)]...), :)
+        end
+    else
+        #The array in the form of [[tree1_Cell1_lower_left_front_corner, tree1_Cell1_lower_right_front_corner, tree1_Cell1_upper_right_front_corner, tree1_Cell1_upper_left_front_corner, tree1_Cell1_lower_left_back_corner, tree1_Cell1_lower_right_back_corner, tree1_Cell1_upper_right_back_corner, tree1_Cell1_upper_left_back_corner], ... (iterating first over cells, then trees)]
+        #gets reshaped to a 1D Array
+        @trixi_timeit timer() "generating connectivity array" begin
+            node["catalyst/channels/input/data/topologies/mesh/elements/connectivity"] = reshape(vcat([
+                [(c_tr * gsz * gsy * gsx) + (c_z * gsy * gsx) + (c_y * gsx) + c_x
+                (c_tr * gsz * gsy * gsx) + (c_z * gsy * gsx) + (c_y * gsx) + c_x + 1
+                (c_tr * gsz * gsy * gsx) + (c_z * gsy * gsx) + ((c_y + 1) * gsx) + c_x + 1
+                (c_tr * gsz * gsy * gsx) + (c_z * gsy * gsx) + ((c_y + 1) * gsx) + c_x
+                (c_tr * gsz * gsy * gsx) + ((c_z + 1) * gsy * gsx) + (c_y * gsx) + c_x
+                (c_tr * gsz * gsy * gsx) + ((c_z + 1) * gsy * gsx) + (c_y * gsx) + c_x + 1
+                (c_tr * gsz * gsy * gsx) + ((c_z + 1) * gsy * gsx) + ((c_y + 1) * gsx) + c_x + 1
+                (c_tr * gsz * gsy * gsx) + ((c_z + 1) * gsy * gsx) + ((c_y + 1) * gsx) + c_x]
+                for c_x in 0:(gsx - 2) for c_y in 0:(gsy - 2) for c_z in 0:(gsz - 2) for c_tr in 0:(gstr - 1)]...), :)
+        end
+    end
 
     #creating a field for the data from the simulation and passing the data to the conduit node
     @trixi_timeit timer() "passing simulation data to conduit node" begin
@@ -401,6 +387,8 @@ function create_conduit_node_no_interpolation(integrator, mesh::TreeMesh, equati
             elseif ndims(mesh) == 2
                 node["catalyst/channels/input/data/fields/" * varnames[i] * "/values"] = vec(unstructured_data[:, :, :, i])
             elseif ndims(mesh) == 3
+                println("soll:" * string(size(x)))
+                println(size(vec(unstructured_data[:, :, :, :, i])))
                 node["catalyst/channels/input/data/fields/" * varnames[i] * "/values"] = vec(unstructured_data[:, :, :, :, i])
             end
         end
