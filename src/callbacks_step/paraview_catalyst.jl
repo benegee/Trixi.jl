@@ -310,6 +310,14 @@ function create_conduit_node_no_interpolation(integrator, mesh::TreeMesh, equati
     #node data and location
     leaf_cell_ids = leaf_cells(mesh.tree)
     unstructured_data = get_unstructured_data(Trixi.wrap_array(integrator.u, integrator.p), solution_variables_, mesh, equations, solver, cache)
+    uds = size(unstructured_data)
+    reshaped_data = (ndims(mesh) == 3) ? reshape(vcat([
+        unstructured_data[i,j,k,l,m]
+        for m in 1:uds[5] for k in uds[3] for j in 1:uds[2] for l in 1:uds[4] for i in 1:uds[1]
+    ]...), :) : reshape(vcat([
+        unstructured_data[i,j,k,l]
+        for l in 1:uds[4] for j in 1:uds[2] for k in 1:uds[3] for i in 1:uds[1]
+    ]...), :)
     coordinates = mesh.tree.coordinates[:, leaf_cell_ids]
     levels = mesh.tree.levels[leaf_cell_ids]
     length_level_0 = mesh.tree.length_level_0
@@ -317,19 +325,17 @@ function create_conduit_node_no_interpolation(integrator, mesh::TreeMesh, equati
     max_level = maximum(levels)
     max_nvisnodes = nnodes(solver)
     resolution = max_nvisnodes * 2^max_level
-    x = collect(range(-1, 1, length = resolution + 1)) .* length_level_0 / 2 .+
+    xs = collect(range(-1, 1, length = resolution + 1)) .* length_level_0 / 2 .+
          center_level_0[1]
-    y = collect(range(-1, 1, length = resolution + 1)) .* length_level_0 / 2 .+
+    ys = collect(range(-1, 1, length = resolution + 1)) .* length_level_0 / 2 .+
          center_level_0[2]
-    z = (ndims(mesh) == 3) ? collect(range(-1, 1, length = resolution + 1)) .* length_level_0 / 2 .+
+    zs = (ndims(mesh) == 3) ? collect(range(-1, 1, length = resolution + 1)) .* length_level_0 / 2 .+
          center_level_0[3] : nothing
 
     #information about the topology underneath the data
-    grid_size = size(unstructured_data)
-    gsx = grid_size[2]
-    gsy = grid_size[3]
-    gsz =(ndims(mesh) == 3) ? grid_size[4] : nothing
-    gstr =(ndims(mesh) == 3) ? grid_size[5] : grid_size[4]
+    gsx = size(xs)[1]
+    gsy = size(ys)[1]
+    gsz =(ndims(mesh) == 3) ? size(zs)[1] : nothing
 
     #passing general information to the conduit node
     node["catalyst/state/timestep"] = timestep
@@ -337,11 +343,18 @@ function create_conduit_node_no_interpolation(integrator, mesh::TreeMesh, equati
     node["catalyst/channels/input/type"] = "mesh"
     node["catalyst/channels/input/data/coordsets/coords/type"] = "explicit"
 
-    
-    node["catalyst/channels/input/data/coordsets/coords/values/x"] = x
-    node["catalyst/channels/input/data/coordsets/coords/values/y"] = y
     if ndims(mesh) == 3
+        x = [xs[i] for k in 1:gsz for j in 1:gsy for i in 1:gsx]
+        node["catalyst/channels/input/data/coordsets/coords/values/x"] = x
+        y = [ys[j] for k in 1:gsz for j in 1:gsy for i in 1:gsx]
+        node["catalyst/channels/input/data/coordsets/coords/values/y"] = y
+        z = [zs[k] for k in 1:gsz for j in 1:gsy for i in 1:gsx]
         node["catalyst/channels/input/data/coordsets/coords/values/z"] = z
+    else
+        x = [xs[i] for j in 1:gsy for i in 1:gsx]
+        node["catalyst/channels/input/data/coordsets/coords/values/x"] = x
+        y = [ys[j] for j in 1:gsy for i in 1:gsx]
+        node["catalyst/channels/input/data/coordsets/coords/values/y"] = y
     end
 
     #creating a topology
@@ -353,38 +366,36 @@ function create_conduit_node_no_interpolation(integrator, mesh::TreeMesh, equati
         #gets reshaped to a 1D Array
         @trixi_timeit timer() "generating connectivity array" begin
             node["catalyst/channels/input/data/topologies/mesh/elements/connectivity"] = reshape(vcat([
-                [(c_tr * gsy * gsx) + (c_y * gsx) + c_x
-                (c_tr * gsy * gsx) + ((c_y + 1) * gsx) + c_x
-                (c_tr * gsy * gsx) + ((c_y + 1) * gsx) + c_x + 1
-                (c_tr * gsy * gsx) + (c_y * gsx) + c_x + 1]
-                for c_x in 0:(gsx - 2) for c_y in 0:(gsy - 2) for c_tr in 0:(gstr - 1)]...), :)
+                [(c_y * gsx) + c_x
+                ((c_y + 1) * gsx) + c_x
+                ((c_y + 1) * gsx) + c_x + 1
+                (c_y * gsx) + c_x + 1]
+                for c_x in 0:(gsx - 2) for c_y in 0:(gsy - 2)]...), :)
         end
     else
         #The array in the form of [[tree1_Cell1_lower_left_front_corner, tree1_Cell1_lower_right_front_corner, tree1_Cell1_upper_right_front_corner, tree1_Cell1_upper_left_front_corner, tree1_Cell1_lower_left_back_corner, tree1_Cell1_lower_right_back_corner, tree1_Cell1_upper_right_back_corner, tree1_Cell1_upper_left_back_corner], ... (iterating first over cells, then trees)]
         #gets reshaped to a 1D Array
         @trixi_timeit timer() "generating connectivity array" begin
             node["catalyst/channels/input/data/topologies/mesh/elements/connectivity"] = reshape(vcat([
-                [(c_tr * gsz * gsy * gsx) + (c_z * gsy * gsx) + (c_y * gsx) + c_x
-                (c_tr * gsz * gsy * gsx) + (c_z * gsy * gsx) + (c_y * gsx) + c_x + 1
-                (c_tr * gsz * gsy * gsx) + (c_z * gsy * gsx) + ((c_y + 1) * gsx) + c_x + 1
-                (c_tr * gsz * gsy * gsx) + (c_z * gsy * gsx) + ((c_y + 1) * gsx) + c_x
-                (c_tr * gsz * gsy * gsx) + ((c_z + 1) * gsy * gsx) + (c_y * gsx) + c_x
-                (c_tr * gsz * gsy * gsx) + ((c_z + 1) * gsy * gsx) + (c_y * gsx) + c_x + 1
-                (c_tr * gsz * gsy * gsx) + ((c_z + 1) * gsy * gsx) + ((c_y + 1) * gsx) + c_x + 1
-                (c_tr * gsz * gsy * gsx) + ((c_z + 1) * gsy * gsx) + ((c_y + 1) * gsx) + c_x]
-                for c_x in 0:(gsx - 2) for c_y in 0:(gsy - 2) for c_z in 0:(gsz - 2) for c_tr in 0:(gstr - 1)]...), :)
+                [(c_z * gsy * gsx) + (c_y * gsx) + c_x
+                (c_z * gsy * gsx) + (c_y * gsx) + c_x + 1
+                (c_z * gsy * gsx) + ((c_y + 1) * gsx) + c_x + 1
+                (c_z * gsy * gsx) + ((c_y + 1) * gsx) + c_x
+                ((c_z + 1) * gsy * gsx) + (c_y * gsx) + c_x
+                ((c_z + 1) * gsy * gsx) + (c_y * gsx) + c_x + 1
+                ((c_z + 1) * gsy * gsx) + ((c_y + 1) * gsx) + c_x + 1
+                ((c_z + 1) * gsy * gsx) + ((c_y + 1) * gsx) + c_x]
+                for c_x in 0:(gsx - 2) for c_y in 0:(gsy - 2) for c_z in 0:(gsz - 2)]...), :)
         end
     end
 
     #creating a field for the data from the simulation and passing the data to the conduit node
     @trixi_timeit timer() "passing simulation data to conduit node" begin
         for i in 1:nvars
-            node["catalyst/channels/input/data/fields/" * varnames[i] * "/association"] = "vertex"
+            node["catalyst/channels/input/data/fields/" * varnames[i] * "/association"] = "element"
             node["catalyst/channels/input/data/fields/" * varnames[i] * "/topology"] = "mesh"
             node["catalyst/channels/input/data/fields/" * varnames[i] * "/volume_dependent"] = "false"
-            if ndims(mesh) == 1
-                node["catalyst/channels/input/data/fields/" * varnames[i] * "/values"] = vec(unstructured_data[:, :, i])
-            elseif ndims(mesh) == 2
+            if ndims(mesh) == 2
                 node["catalyst/channels/input/data/fields/" * varnames[i] * "/values"] = vec(unstructured_data[:, :, :, i])
             elseif ndims(mesh) == 3
                 println("soll:" * string(size(x)))
@@ -497,11 +508,13 @@ function (visualization_callback::ParaviewCatalystCallback)(integrator)
     # Conduit.node_info(node) do info_node
     #    Conduit.node_print(info_node, detailed = true)
     # end
-
-    #passing the problem data to a function fitting the right mesh, to create a conduit node, which is then passed to paraview
-    ParaviewCatalyst.catalyst_execute(visualization_callback.interpolation ? 
+    node = (visualization_callback.interpolation ? 
     create_conduit_node(integrator, mesh, equations, solver, cache, visualization_callback.nvisnodes) : 
     create_conduit_node_no_interpolation(integrator, mesh, equations, solver, cache))
+    #passing the problem data to a function fitting the right mesh, to create a conduit node, which is then passed to paraview
+    @trixi_timeit timer() "catalyst execute" begin
+        ParaviewCatalyst.catalyst_execute(node)
+    end
 
     return nothing
 end 
