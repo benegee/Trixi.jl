@@ -6,7 +6,7 @@ using ParaviewCatalyst
 ###############################################################################
 # semidiscretization of the linear advection equation
 
-advection_velocity = (2000, -70, 50)
+advection_velocity = (20, -70, 50)
 equations = LinearScalarAdvectionEquation3D(advection_velocity)
 
 # Create DG solver with polynomial degree = 3 and (local) Lax-Friedrichs/Rusanov flux as surface flux
@@ -46,7 +46,7 @@ save_solution = SaveSolutionCallback(interval = 100,
 # The StepsizeCallback handles the re-calculation of the maximum Δt after each time step
 stepsize_callback = StepsizeCallback(cfl = 1.2)
 
-catalyst_callback = ParaviewCatalystCallback(interval=100, interpolation=false)
+catalyst_callback = ParaviewCatalystCallback(interval=100, interpolation=true)
 
 # Create a CallbackSet to collect all callbacks such that they can be passed to the ODE solver
 callbacks = CallbackSet(summary_callback, analysis_callback, save_solution,

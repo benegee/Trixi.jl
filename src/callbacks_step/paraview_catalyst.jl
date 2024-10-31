@@ -268,16 +268,30 @@ function create_conduit_node(integrator, mesh::P4estMesh, equations, solver, cac
         #The array in the form of [[tree1_Cell1_lower_left_front_corner, tree1_Cell1_lower_right_front_corner, tree1_Cell1_upper_right_front_corner, tree1_Cell1_upper_left_front_corner, tree1_Cell1_lower_left_back_corner, tree1_Cell1_lower_right_back_corner, tree1_Cell1_upper_right_back_corner, tree1_Cell1_upper_left_back_corner], ... (iterating first over cells, then trees)]
         #gets reshaped to a 1D Array
         @trixi_timeit timer() "generating connectivity array" begin
-            node["catalyst/channels/input/data/topologies/mesh/elements/connectivity"] = reshape(vcat([
-                [(c_tr * gsz * gsy * gsx) + (c_z * gsy * gsx) + (c_y * gsx) + c_x
-                (c_tr * gsz * gsy * gsx) + (c_z * gsy * gsx) + (c_y * gsx) + c_x + 1
-                (c_tr * gsz * gsy * gsx) + (c_z * gsy * gsx) + ((c_y + 1) * gsx) + c_x + 1
-                (c_tr * gsz * gsy * gsx) + (c_z * gsy * gsx) + ((c_y + 1) * gsx) + c_x
-                (c_tr * gsz * gsy * gsx) + ((c_z + 1) * gsy * gsx) + (c_y * gsx) + c_x
-                (c_tr * gsz * gsy * gsx) + ((c_z + 1) * gsy * gsx) + (c_y * gsx) + c_x + 1
-                (c_tr * gsz * gsy * gsx) + ((c_z + 1) * gsy * gsx) + ((c_y + 1) * gsx) + c_x + 1
-                (c_tr * gsz * gsy * gsx) + ((c_z + 1) * gsy * gsx) + ((c_y + 1) * gsx) + c_x]
-                for c_x in 0:(gsx - 2) for c_y in 0:(gsy - 2) for c_z in 0:(gsz - 2) for c_tr in 0:(gstr - 1)]...), :)
+        connectivity = [0, 1, gsx + 1, gsx, gsy * gsx, gsy * gsx + 1, gsy * gsx + gsx + 1, gsy * gsx + gsx]
+        for c_x in 0:(gsx - 2), c_y in 0:(gsy - 2), c_z in 0:(gsz - 2), c_tr in 0:(gstr - 1)
+            if !(c_x == 0 && c_y == 0 && c_z == 0 && c_tr == 0)
+                push!(connectivity, (c_tr * gsz * gsy * gsx) + (c_z * gsy * gsx) + (c_y * gsx) + c_x)
+                push!(connectivity, (c_tr * gsz * gsy * gsx) + (c_z * gsy * gsx) + (c_y * gsx) + c_x + 1)
+                push!(connectivity, (c_tr * gsz * gsy * gsx) + (c_z * gsy * gsx) + ((c_y + 1) * gsx) + c_x + 1)
+                push!(connectivity, (c_tr * gsz * gsy * gsx) + (c_z * gsy * gsx) + ((c_y + 1) * gsx) + c_x)
+                push!(connectivity, (c_tr * gsz * gsy * gsx) + ((c_z + 1) * gsy * gsx) + (c_y * gsx) + c_x)
+                push!(connectivity, (c_tr * gsz * gsy * gsx) + ((c_z + 1) * gsy * gsx) + (c_y * gsx) + c_x + 1)
+                push!(connectivity, (c_tr * gsz * gsy * gsx) + ((c_z + 1) * gsy * gsx) + ((c_y + 1) * gsx) + c_x + 1)
+                push!(connectivity, (c_tr * gsz * gsy * gsx) + ((c_z + 1) * gsy * gsx) + ((c_y + 1) * gsx) + c_x)
+            end
+        end
+        node["catalyst/channels/input/data/topologies/mesh/elements/connectivity"] = connectivity
+            # node["catalyst/channels/input/data/topologies/mesh/elements/connectivity"] = reshape(vcat([
+            #     [(c_tr * gsz * gsy * gsx) + (c_z * gsy * gsx) + (c_y * gsx) + c_x
+            #     (c_tr * gsz * gsy * gsx) + (c_z * gsy * gsx) + (c_y * gsx) + c_x + 1
+            #     (c_tr * gsz * gsy * gsx) + (c_z * gsy * gsx) + ((c_y + 1) * gsx) + c_x + 1
+            #     (c_tr * gsz * gsy * gsx) + (c_z * gsy * gsx) + ((c_y + 1) * gsx) + c_x
+            #     (c_tr * gsz * gsy * gsx) + ((c_z + 1) * gsy * gsx) + (c_y * gsx) + c_x
+            #     (c_tr * gsz * gsy * gsx) + ((c_z + 1) * gsy * gsx) + (c_y * gsx) + c_x + 1
+            #     (c_tr * gsz * gsy * gsx) + ((c_z + 1) * gsy * gsx) + ((c_y + 1) * gsx) + c_x + 1
+            #     (c_tr * gsz * gsy * gsx) + ((c_z + 1) * gsy * gsx) + ((c_y + 1) * gsx) + c_x]
+            #     for c_x in 0:(gsx - 2) for c_y in 0:(gsy - 2) for c_z in 0:(gsz - 2) for c_tr in 0:(gstr - 1)]...), :)
         end
     end
 
