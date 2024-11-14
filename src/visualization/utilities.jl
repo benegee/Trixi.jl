@@ -373,7 +373,7 @@ function get_data_3d(center_level_0, length_level_0, coordinates, levels,
 
     # Determine element vertices to plot grid lines
     if grid_lines
-        mesh_vertices_x, mesh_vertices_y, mesh_vertices_z = calc_vertices(coordinates,
+        mesh_vertices_x, mesh_vertices_y, mesh_vertices_z = calc_vertices3D(coordinates,
                                                                           levels,
                                                                           length_level_0)
     else
@@ -1559,13 +1559,13 @@ end
 #       thus be changed in future releases.
 function calc_vertices3D(coordinates, levels, length_level_0)
     ndim = size(coordinates, 1)
-    @assert ndim==2 "only works in 2D"
 
     # Initialize output arrays
     n_elements = length(levels)
     n_points_per_element = 2^ndim + 2
     x = Vector{Float64}(undef, n_points_per_element * n_elements)
     y = Vector{Float64}(undef, n_points_per_element * n_elements)
+    z = Vector{Float64}(undef, n_points_per_element * n_elements)
 
     # Calculate vertices for all coordinates at once
     for element_id in 1:n_elements
@@ -1584,6 +1584,13 @@ function calc_vertices3D(coordinates, levels, length_level_0)
         y[index + 4] = coordinates[2, element_id] + 1 / 2 * length
         y[index + 5] = coordinates[2, element_id] - 1 / 2 * length
         y[index + 6] = NaN
+
+        z[index + 1] = coordinates[3, element_id] - 1 / 2 * length
+        z[index + 2] = coordinates[3, element_id] - 1 / 2 * length
+        z[index + 3] = coordinates[3, element_id] + 1 / 2 * length
+        z[index + 4] = coordinates[3, element_id] + 1 / 2 * length
+        z[index + 5] = coordinates[3, element_id] - 1 / 2 * length
+        z[index + 6] = NaN
     end
 
     return x, y
@@ -1595,7 +1602,6 @@ end
 #       thus be changed in future releases.
 function calc_vertices3D(node_coordinates, mesh)
     @unpack cells_per_dimension = mesh
-    @assert size(node_coordinates, 1)==2 "only works in 2D"
 
     linear_indices = LinearIndices(size(mesh))
 
@@ -1610,6 +1616,7 @@ function calc_vertices3D(node_coordinates, mesh)
     # Rely on Plots.jl to ignore `NaN`s (i.e., they are not plotted) to handle shorter lines
     x = fill(NaN, max_length * (n_nodes - 1) + 1, n_lines)
     y = fill(NaN, max_length * (n_nodes - 1) + 1, n_lines)
+    z = fill(NaN, max_length * (n_nodes - 1) + 1, n_lines)
 
     line_index = 1
     # Lines in x-direction
@@ -1619,6 +1626,7 @@ function calc_vertices3D(node_coordinates, mesh)
         for node in 1:(n_nodes - 1)
             x[i, line_index] = node_coordinates[1, node, 1, linear_indices[cell_x, 1]]
             y[i, line_index] = node_coordinates[2, node, 1, linear_indices[cell_x, 1]]
+            z[i, line_index] = node_coordinates[3, node, 1, linear_indices[cell_x, 1]]
 
             i += 1
         end
@@ -1626,6 +1634,7 @@ function calc_vertices3D(node_coordinates, mesh)
     # Last point on bottom boundary
     x[i, line_index] = node_coordinates[1, end, 1, linear_indices[end, 1]]
     y[i, line_index] = node_coordinates[2, end, 1, linear_indices[end, 1]]
+    z[i, line_index] = node_coordinates[3, end, 1, linear_indices[end, 1]]
 
     # Other lines in x-direction
     line_index += 1

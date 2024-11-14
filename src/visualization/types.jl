@@ -263,6 +263,11 @@ julia> plot(pd["scalar"]) # To plot only a single variable
 julia> plot!(getmesh(pd)) # To add grid lines to the plot
 ```
 """
+
+function PlotData3D(sol::TrixiODESolution; kwargs...)
+    PlotData3D(sol.u[end], sol.prob.p; kwargs...)
+end
+
 function PlotData3D(u_ode, semi; kwargs...)
     PlotData3D(wrap_array_native(u_ode, semi),
                mesh_equations_solver_cache(semi)...;
@@ -277,7 +282,7 @@ end
 # Create a PlotData3DCartesian for a TreeMesh.
 function PlotData3DCartesian(u, mesh::TreeMesh, equations, solver, cache;
                              solution_variables = nothing,
-                             grid_lines = true, max_supported_level = 11,
+                             grid_lines = false, max_supported_level = 11,
                              nvisnodes = nothing)
     @assert ndims(mesh)==3 "unsupported number of dimensions $ndims (must be 3)"
     solution_variables_ = digest_solution_variables(equations, solution_variables)

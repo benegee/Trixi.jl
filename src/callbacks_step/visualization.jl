@@ -145,7 +145,12 @@ end
 function (visualization_callback::VisualizationCallback)(integrator)
     u_ode = integrator.u
     semi = integrator.p
+    mesh, equations, solver, cache = mesh_equations_solver_cache(integrator.p)
     @unpack plot_arguments, solution_variables, variable_names, show_mesh, plot_data_creator, plot_creator = visualization_callback
+    if ndims(mesh) == 3 
+        plot_data_creator = plot_data_creator == PlotData2D ? PlotData3D : plot_data_creator
+        plot_creator = plot_creator == show_plot ? show_plot3D : plot_creator
+    end
 
     # Extract plot data
     plot_data = plot_data_creator(u_ode, semi, solution_variables = solution_variables)
@@ -188,11 +193,77 @@ function show_plot(plot_data, variable_names;
     # Gather subplots
     plots = []
     for v in variable_names
+        println(plot_data[v])
         push!(plots, Plots.plot(plot_data[v]; plot_arguments...))
     end
     if show_mesh
         push!(plots, Plots.plot(getmesh(plot_data); plot_arguments...))
     end
+
+    # Note, for the visualization callback to work for general equation systems
+    # this layout construction would need to use the if-logic below.
+    # Currently, there is no use case for this so it is left here as a note.
+    #
+    # Determine layout
+    # if length(plots) <= 3
+    #   cols = length(plots)
+    #   rows = 1
+    # else
+    #   cols = ceil(Int, sqrt(length(plots)))
+    #   rows = div(length(plots), cols, RoundUp)
+    # end
+    # layout = (rows, cols)
+
+    # Determine layout
+    cols = ceil(Int, sqrt(length(plots)))
+    rows = div(length(plots), cols, RoundUp)
+    layout = (rows, cols)
+
+    # Show plot
+    display(Plots.plot(plots..., layout = layout))
+end
+
+function show_plot3D(plot_data, variable_names;
+                    show_mesh = false, plot_arguments = Dict{Symbol, Any}(),
+                    time = nothing, timestep = nothing)
+    # Gather subplots
+    # println(size(plot_data))
+    # println(plot_data)
+
+    xs = plot_data.x
+    ys = plot_data.y
+    zs = plot_data.z
+    gsx = size(xs)[1]
+    gsy = size(ys)[1]
+    gsz = size(zs)[1]
+    x = [xs[i] for k in 1:gsz for j in 1:gsy for i in 1:gsx]
+    y = [ys[j] for k in 1:gsz for j in 1:gsy for i in 1:gsx]
+    z = [zs[k] for k in 1:gsz for j in 1:gsy for i in 1:gsx]
+
+    connectivity = [0, 1, gsx + 1, gsx, gsy * gsx, gsy * gsx + 1, gsy * gsx + gsx + 1, gsy * gsx + gsx]
+        for c_x in 0:(gsx - 2), c_y in 0:(gsy - 2), c_z in 0:(gsz - 2)
+            if !(c_x == 0 && c_y == 0 && c_z == 0)
+                push!(connectivity, ((c_z * gsy * gsx) + (c_y * gsx) + c_x
+                , (c_z * gsy * gsx) + (c_y * gsx) + c_x + 1
+                , (c_z * gsy * gsx) + ((c_y + 1) * gsx) + c_x + 1
+                , (c_z * gsy * gsx) + ((c_y + 1) * gsx) + c_x
+                , ((c_z + 1) * gsy * gsx) + (c_y * gsx) + c_x
+                , ((c_z + 1) * gsy * gsx) + (c_y * gsx) + c_x + 1
+                , ((c_z + 1) * gsy * gsx) + ((c_y + 1) * gsx) + c_x + 1
+                , ((c_z + 1) * gsy * gsx) + ((c_y + 1) * gsx) + c_x))
+            end
+        end
+
+    plots = []
+    for v in 1:size(variable_names)[1]
+        abs_dat = abs.(vec(plot_data.data[v]))
+        md = maximum(abs_dat)
+        alpha = abs_dat / md
+        push!(plots, Plots.plot(x, y, z, fill_z = vec(plot_data.data[v]), fa = alpha, t = :mesh3d, connections = connectivity; plot_arguments...))
+    end
+    # if show_mesh
+    # push!(plots, Plots.plot(getmesh(plot_data); plot_arguments...))
+    # end
 
     # Note, for the visualization callback to work for general equation systems
     # this layout construction would need to use the if-logic below.
