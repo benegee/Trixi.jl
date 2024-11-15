@@ -282,7 +282,7 @@ end
 # Create a PlotData3DCartesian for a TreeMesh.
 function PlotData3DCartesian(u, mesh::TreeMesh, equations, solver, cache;
                              solution_variables = nothing,
-                             grid_lines = false, max_supported_level = 11,
+                             grid_lines = true, max_supported_level = 11,
                              nvisnodes = nothing)
     @assert ndims(mesh)==3 "unsupported number of dimensions $ndims (must be 3)"
     solution_variables_ = digest_solution_variables(equations, solution_variables)

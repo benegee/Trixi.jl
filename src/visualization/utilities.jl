@@ -1576,24 +1576,36 @@ function calc_vertices3D(coordinates, levels, length_level_0)
         x[index + 3] = coordinates[1, element_id] + 1 / 2 * length
         x[index + 4] = coordinates[1, element_id] - 1 / 2 * length
         x[index + 5] = coordinates[1, element_id] - 1 / 2 * length
-        x[index + 6] = NaN
+        x[index + 6] = coordinates[1, element_id] + 1 / 2 * length
+        x[index + 7] = coordinates[1, element_id] + 1 / 2 * length
+        x[index + 8] = coordinates[1, element_id] - 1 / 2 * length
+        x[index + 9] = coordinates[1, element_id] - 1 / 2 * length
+        x[index + 10] = NaN
 
         y[index + 1] = coordinates[2, element_id] - 1 / 2 * length
         y[index + 2] = coordinates[2, element_id] - 1 / 2 * length
         y[index + 3] = coordinates[2, element_id] + 1 / 2 * length
         y[index + 4] = coordinates[2, element_id] + 1 / 2 * length
         y[index + 5] = coordinates[2, element_id] - 1 / 2 * length
-        y[index + 6] = NaN
+        y[index + 6] = coordinates[2, element_id] - 1 / 2 * length
+        y[index + 7] = coordinates[2, element_id] + 1 / 2 * length
+        y[index + 8] = coordinates[2, element_id] + 1 / 2 * length
+        y[index + 9] = coordinates[2, element_id] - 1 / 2 * length
+        y[index + 10] = NaN
 
         z[index + 1] = coordinates[3, element_id] - 1 / 2 * length
         z[index + 2] = coordinates[3, element_id] - 1 / 2 * length
-        z[index + 3] = coordinates[3, element_id] + 1 / 2 * length
-        z[index + 4] = coordinates[3, element_id] + 1 / 2 * length
-        z[index + 5] = coordinates[3, element_id] - 1 / 2 * length
-        z[index + 6] = NaN
+        z[index + 3] = coordinates[3, element_id] - 1 / 2 * length
+        z[index + 4] = coordinates[3, element_id] - 1 / 2 * length
+        z[index + 5] = coordinates[3, element_id] + 1 / 2 * length
+        z[index + 6] = coordinates[3, element_id] + 1 / 2 * length
+        z[index + 7] = coordinates[3, element_id] + 1 / 2 * length
+        z[index + 8] = coordinates[3, element_id] + 1 / 2 * length
+        z[index + 9] = coordinates[3, element_id] - 1 / 2 * length
+        z[index + 10] = NaN
     end
 
-    return x, y
+    return x, y, z
 end
 
 # Calculate the vertices to plot each grid line for StructuredMesh
@@ -1601,99 +1613,84 @@ end
 # Note: This is a low-level function that is not considered as part of Trixi.jl's interface and may
 #       thus be changed in future releases.
 function calc_vertices3D(node_coordinates, mesh)
+    #this function uses pieces of ai-generated code
     @unpack cells_per_dimension = mesh
+
+    @assert size(node_coordinates, 1) == 3 "only works in 3D"
 
     linear_indices = LinearIndices(size(mesh))
 
     # Initialize output arrays
-    n_lines = sum(cells_per_dimension) + 2
+    n_lines = ((cells_per_dimension[2] + 1) * (cells_per_dimension[3] + 1) +  # x-direction
+          (cells_per_dimension[1] + 1) * (cells_per_dimension[3] + 1) +  # y-direction
+          (cells_per_dimension[1] + 1) * (cells_per_dimension[2] + 1))    # z-direction
     max_length = maximum(cells_per_dimension)
     n_nodes = size(node_coordinates, 2)
 
-    # Create output as two matrices `x` and `y`, each holding the node locations for each of the `n_lines` grid lines
-    # The # of rows in the matrices must be sufficient to store the longest dimension (`max_length`),
-    # and for each the node locations without doubling the corner nodes (`n_nodes-1`), plus the final node (`+1`)
-    # Rely on Plots.jl to ignore `NaN`s (i.e., they are not plotted) to handle shorter lines
     x = fill(NaN, max_length * (n_nodes - 1) + 1, n_lines)
     y = fill(NaN, max_length * (n_nodes - 1) + 1, n_lines)
     z = fill(NaN, max_length * (n_nodes - 1) + 1, n_lines)
 
     line_index = 1
+
     # Lines in x-direction
-    # Bottom boundary
-    i = 1
-    for cell_x in axes(mesh, 1)
-        for node in 1:(n_nodes - 1)
-            x[i, line_index] = node_coordinates[1, node, 1, linear_indices[cell_x, 1]]
-            y[i, line_index] = node_coordinates[2, node, 1, linear_indices[cell_x, 1]]
-            z[i, line_index] = node_coordinates[3, node, 1, linear_indices[cell_x, 1]]
-
-            i += 1
-        end
-    end
-    # Last point on bottom boundary
-    x[i, line_index] = node_coordinates[1, end, 1, linear_indices[end, 1]]
-    y[i, line_index] = node_coordinates[2, end, 1, linear_indices[end, 1]]
-    z[i, line_index] = node_coordinates[3, end, 1, linear_indices[end, 1]]
-
-    # Other lines in x-direction
-    line_index += 1
-    for cell_y in axes(mesh, 2)
+    for cell_y in axes(mesh, 2), cell_z in axes(mesh, 3)
         i = 1
         for cell_x in axes(mesh, 1)
             for node in 1:(n_nodes - 1)
-                x[i, line_index] = node_coordinates[1, node, end,
-                                                    linear_indices[cell_x, cell_y]]
-                y[i, line_index] = node_coordinates[2, node, end,
-                                                    linear_indices[cell_x, cell_y]]
-
+                idx = linear_indices[cell_x, cell_y, cell_z]
+                x[i, line_index] = node_coordinates[1, node, 1, idx]
+                y[i, line_index] = node_coordinates[2, node, 1, idx]
+                z[i, line_index] = node_coordinates[3, node, 1, idx]
                 i += 1
             end
         end
         # Last point on line
-        x[i, line_index] = node_coordinates[1, end, end, linear_indices[end, cell_y]]
-        y[i, line_index] = node_coordinates[2, end, end, linear_indices[end, cell_y]]
-
+        x[i, line_index] = node_coordinates[1, end, 1, linear_indices[end, cell_y, cell_z]]
+        y[i, line_index] = node_coordinates[2, end, 1, linear_indices[end, cell_y, cell_z]]
+        z[i, line_index] = node_coordinates[3, end, 1, linear_indices[end, cell_y, cell_z]]
         line_index += 1
     end
 
     # Lines in y-direction
-    # Left boundary
-    i = 1
-    for cell_y in axes(mesh, 2)
-        for node in 1:(n_nodes - 1)
-            x[i, line_index] = node_coordinates[1, 1, node, linear_indices[1, cell_y]]
-            y[i, line_index] = node_coordinates[2, 1, node, linear_indices[1, cell_y]]
-
-            i += 1
-        end
-    end
-    # Last point on left boundary
-    x[i, line_index] = node_coordinates[1, 1, end, linear_indices[1, end]]
-    y[i, line_index] = node_coordinates[2, 1, end, linear_indices[1, end]]
-
-    # Other lines in y-direction
-    line_index += 1
-    for cell_x in axes(mesh, 1)
+    for cell_x in axes(mesh, 1), cell_z in axes(mesh, 3)
         i = 1
         for cell_y in axes(mesh, 2)
             for node in 1:(n_nodes - 1)
-                x[i, line_index] = node_coordinates[1, end, node,
-                                                    linear_indices[cell_x, cell_y]]
-                y[i, line_index] = node_coordinates[2, end, node,
-                                                    linear_indices[cell_x, cell_y]]
-
+                idx = linear_indices[cell_x, cell_y, cell_z]
+                x[i, line_index] = node_coordinates[1, 1, node, idx]
+                y[i, line_index] = node_coordinates[2, 1, node, idx]
+                z[i, line_index] = node_coordinates[3, 1, node, idx]
                 i += 1
             end
         end
         # Last point on line
-        x[i, line_index] = node_coordinates[1, end, end, linear_indices[cell_x, end]]
-        y[i, line_index] = node_coordinates[2, end, end, linear_indices[cell_x, end]]
-
+        x[i, line_index] = node_coordinates[1, 1, end, linear_indices[cell_x, end, cell_z]]
+        y[i, line_index] = node_coordinates[2, 1, end, linear_indices[cell_x, end, cell_z]]
+        z[i, line_index] = node_coordinates[3, 1, end, linear_indices[cell_x, end, cell_z]]
         line_index += 1
     end
 
-    return x, y
+    # Lines in z-direction
+    for cell_x in axes(mesh, 1), cell_y in axes(mesh, 2)
+        i = 1
+        for cell_z in axes(mesh, 3)
+            for node in 1:(n_nodes - 1)
+                idx = linear_indices[cell_x, cell_y, cell_z]
+                x[i, line_index] = node_coordinates[1, 1, node, idx]
+                y[i, line_index] = node_coordinates[2, 1, node, idx]
+                z[i, line_index] = node_coordinates[3, 1, node, idx]
+                i += 1
+            end
+        end
+        # Last point on line
+        x[i, line_index] = node_coordinates[1, 1, end, linear_indices[cell_x, cell_y, end]]
+        y[i, line_index] = node_coordinates[2, 1, end, linear_indices[cell_x, cell_y, end]]
+        z[i, line_index] = node_coordinates[3, 1, end, linear_indices[cell_x, cell_y, end]]
+        line_index += 1
+    end
+
+    return x, y, z
 end
 
 # Calculate the vertices for each mesh cell such that it can be visualized as a closed box

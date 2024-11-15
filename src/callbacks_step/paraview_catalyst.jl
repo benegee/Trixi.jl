@@ -58,7 +58,6 @@ You can also specify a path for a custom catalyst pipeline to be used instead of
 """
 function ParaviewCatalystCallback(; interval = 0, nvisnodes = nothing, catalyst_pipeline = nothing, interpolation = true
                                )
-    mpi_isparallel() && error("this callback does not work in parallel yet")
 
     # ParaviewCatalyst.catalyst_initialize(libpath="/home/nico/Paraview/ParaView-5.13.0-MPI-Linux-Python3.10-x86_64/lib/catalyst")
     if catalyst_pipeline === nothing
