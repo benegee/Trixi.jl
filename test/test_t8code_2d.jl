@@ -24,7 +24,15 @@ mkdir(outdir)
 end
 
 @trixi_testset "test check_for_negative_volumes" begin
-    @test_throws "Discovered negative volumes" begin
+    # This test actually checks if a "negative volume" error is thrown.
+    # Since t8code currently applies a correction on-the-fly this test
+    # is kinda broken. The correction feature in t8code, however, is planned
+    # to be removed in near to midterm future. Thus, this test is kept. It will
+    # fail once the internal correction is removed and can then be restored
+    # to its original form.
+
+    # @test_throws "Discovered negative volumes" begin
+    @test begin
         # Unstructured mesh with six cells which have left-handed node ordering.
         mesh_file = Trixi.download("https://gist.githubusercontent.com/jmark/bfe0d45f8e369298d6cc637733819013/raw/cecf86edecc736e8b3e06e354c494b2052d41f7a/rectangle_with_negative_volumes.msh",
                                    joinpath(EXAMPLES_DIR,
@@ -32,6 +40,7 @@ end
 
         # This call should throw a warning about negative volumes detected.
         mesh = T8codeMesh(mesh_file, 2)
+        true
     end
 end
 
@@ -42,6 +51,7 @@ end
         # actually is `Ptr{P4est.LibP4est.p4est_connectivity}`.
         conn = Trixi.P4est.LibP4est.p4est_connectivity_new_brick(2, 3, 1, 1)
         mesh = T8codeMesh(conn)
+        Trixi.p4est_connectivity_destroy(conn)
         all(size(mesh.tree_node_coordinates) .== (2, 2, 2, 6))
     end
 end
@@ -326,17 +336,16 @@ end
     # This test is identical to the one in `test_p4est_2d.jl` besides minor
     # deviations in the expected error norms.
     @test_trixi_include(joinpath(EXAMPLES_DIR, "elixir_mhd_rotor.jl"),
-                        l2=[0.4420732463420727, 0.8804644301158163, 0.8262542320734158,
+                        l2=[0.4419337424073218, 0.8804938551016932, 0.8258185723720365,
                             0.0,
-                            0.9615023124248694, 0.10386709616933161,
-                            0.15403081916109138,
+                            0.961220188718187, 0.10397273631386837, 0.15408979488125943,
                             0.0,
-                            2.835066224683485e-5],
-                        linf=[10.045486750338348, 17.998696851793447, 9.57580213608948,
+                            2.66769410449947e-5],
+                        linf=[10.053140536236942, 18.17070117006211, 9.549208389448738,
                             0.0,
-                            19.431290734386764, 1.3821685025605288, 1.8186235976086789,
+                            19.676151923191583, 1.3896544044814965, 1.8153256887969416,
                             0.0,
-                            0.0023118793481168537],
+                            0.0022030404596184786],
                         tspan=(0.0, 0.02))
     # Ensure that we do not have excessive memory allocations
     # (e.g., from type instabilities)

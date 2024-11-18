@@ -30,11 +30,12 @@ mutable struct T8codeMesh{NDIMS, RealT <: Real, IsParallel, NDIMSP2, NNODES} <:
 
     function T8codeMesh{NDIMS}(forest::Ptr{t8_forest}, tree_node_coordinates, nodes,
                                boundary_names,
-                               current_filename) where {NDIMS}
+                               current_filename,
+                               RealT = Float64) where {NDIMS}
         is_parallel = mpi_isparallel() ? True() : False()
 
-        mesh = new{NDIMS, Float64, typeof(is_parallel), NDIMS + 2, length(nodes)}(forest,
-                                                                                  is_parallel)
+        mesh = new{NDIMS, RealT, typeof(is_parallel), NDIMS + 2, length(nodes)}(forest,
+                                                                                is_parallel)
 
         mesh.nodes = nodes
         mesh.boundary_names = boundary_names
@@ -120,7 +121,7 @@ function T8codeMesh(ndims, ntrees, nelements, tree_node_coordinates, nodes,
 
     # Use linear geometry for now. There is no real Lagrange geometry
     # implementation (volume nodes) yet in t8code.
-    linear_geom = t8_geometry_linear_new(ndims)
+    linear_geom = t8_geometry_linear_new()
     t8_cmesh_register_geometry(cmesh, linear_geom)
 
     # Determine element class.
@@ -272,7 +273,7 @@ function T8codeMesh{NDIMS, RealT}(forest::Ptr{t8_forest}, boundary_names; polyde
                                                     ntuple(_ -> length(nodes), NDIMS)...,
                                                     number_of_trees)
 
-    reference_coordinates = Vector{Float64}(undef, 3)
+    reference_coordinates = Vector{RealT}(undef, 3)
 
     # Calculate node coordinates of reference mesh.
     if NDIMS == 2
@@ -437,15 +438,11 @@ function T8codeMesh(trees_per_dimension; polydeg = 1,
 
     do_partition = 0
     if NDIMS == 2
-        conn = T8code.Libt8.p4est_connectivity_new_brick(trees_per_dimension...,
-                                                         periodicity...)
-        cmesh = t8_cmesh_new_from_p4est(conn, mpi_comm(), do_partition)
-        T8code.Libt8.p4est_connectivity_destroy(conn)
+        cmesh = t8_cmesh_new_brick_2d(trees_per_dimension..., periodicity...,
+                                      sc_MPI_COMM_WORLD)
     elseif NDIMS == 3
-        conn = T8code.Libt8.p8est_connectivity_new_brick(trees_per_dimension...,
-                                                         periodicity...)
-        cmesh = t8_cmesh_new_from_p8est(conn, mpi_comm(), do_partition)
-        T8code.Libt8.p8est_connectivity_destroy(conn)
+        cmesh = t8_cmesh_new_brick_3d(trees_per_dimension..., periodicity...,
+                                      sc_MPI_COMM_WORLD)
     end
 
     do_face_ghost = mpi_isparallel()
@@ -475,7 +472,7 @@ function T8codeMesh(trees_per_dimension; polydeg = 1,
         end
     end
 
-    # Note, `p*est_connectivity_new_brick` converts a domain of `[0,nx] x [0,ny] x ....`.
+    # Note, `t8_cmesh_new_brick_*d` converts a domain of `[0,nx] x [0,ny] x ....`.
     # Hence, transform mesh coordinates to reference space [-1,1]^NDIMS before applying user defined mapping.
     mapping_(xyz...) = mapping((x * 2.0 / tpd - 1.0 for (x, tpd) in zip(xyz,
                                                                         trees_per_dimension))...)
@@ -510,7 +507,7 @@ function T8codeMesh(cmesh::Ptr{t8_cmesh};
     @assert (t8_cmesh_get_num_trees(cmesh)>0) "Given `cmesh` does not contain any trees."
 
     # Infer NDIMS from the geometry of the first tree.
-    NDIMS = Int(t8_geom_get_dimension(t8_cmesh_get_tree_geometry(cmesh, 0)))
+    NDIMS = Int(t8_cmesh_get_dimension(cmesh))
 
     @assert (NDIMS == 2||NDIMS == 3) "NDIMS should be 2 or 3."
 
