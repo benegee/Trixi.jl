@@ -145,12 +145,12 @@ end
 function (visualization_callback::VisualizationCallback)(integrator)
     u_ode = integrator.u
     semi = integrator.p
-    # mesh, equations, solver, cache = mesh_equations_solver_cache(integrator.p)
+    mesh, equations, solver, cache = mesh_equations_solver_cache(integrator.p)
     @unpack plot_arguments, solution_variables, variable_names, show_mesh, plot_data_creator, plot_creator = visualization_callback
-    # if ndims(mesh) == 3 
-    #     plot_data_creator = plot_data_creator == PlotData2D ? PlotData3D : plot_data_creator
-    #     plot_creator = plot_creator == show_plot ? show_plot3D : plot_creator
-    # end
+    if ndims(mesh) == 3 
+        plot_data_creator = plot_data_creator == PlotData2D ? PlotData3D : plot_data_creator
+        plot_creator = plot_creator == show_plot ? show_plot3D : plot_creator
+    end
 
     # Extract plot data
     plot_data = plot_data_creator(u_ode, semi, solution_variables = solution_variables)
@@ -204,14 +204,14 @@ function show_plot(plot_data, variable_names;
     # Currently, there is no use case for this so it is left here as a note.
     #
     # Determine layout
-    # if length(plots) <= 3
-    #   cols = length(plots)
-    #   rows = 1
-    # else
-    #   cols = ceil(Int, sqrt(length(plots)))
-    #   rows = div(length(plots), cols, RoundUp)
-    # end
-    # layout = (rows, cols)
+    if length(plots) <= 3
+      cols = length(plots)
+      rows = 1
+    else
+      cols = ceil(Int, sqrt(length(plots)))
+      rows = div(length(plots), cols, RoundUp)
+    end
+    layout = (rows, cols)
 
     # Determine layout
     cols = ceil(Int, sqrt(length(plots)))
@@ -222,72 +222,58 @@ function show_plot(plot_data, variable_names;
     display(Plots.plot(plots..., layout = layout))
 end
 
-# function show_plot3D(plot_data, variable_names;
-#                     show_mesh = false, plot_arguments = Dict{Symbol, Any}(),
-#                     time = nothing, timestep = nothing)
-#     # Gather subplots
-#     # println(size(plot_data))
-#     # println(plot_data)
+#converts a single int into a tuple of ints, to get a square arrangement for example f(1) = (1,1) f(2) = (2,1) f(3) = (2,2) f(4) = (1,2)
+function intTo2DInt(n)
+    if n == 1
+        return (1,1)
+    end
+    t = intTo2DInt(n-1)
+    if t[1] == 1
+        return (t[2] + 1, 1)
+    elseif t[1] > t[2]
+        return (t[1], t[2] + 1)
+    elseif t[2] >= t[1]
+        return (t[1] - 1, t[2])
+    end
+end
 
-#     xs = plot_data.x
-#     ys = plot_data.y
-#     zs = plot_data.z
-#     gsx = size(xs)[1]
-#     gsy = size(ys)[1]
-#     gsz = size(zs)[1]
-#     x = [xs[i] for k in 1:gsz for j in 1:gsy for i in 1:gsx]
-#     y = [ys[j] for k in 1:gsz for j in 1:gsy for i in 1:gsx]
-#     z = [zs[k] for k in 1:gsz for j in 1:gsy for i in 1:gsx]
+function show_plot3D(plot_data, variable_names;
+                    show_mesh = false, plot_arguments = Dict{Symbol, Any}(),
+                    time = nothing, timestep = nothing)
+    # Gather subplots
+    # println(size(plot_data))
+    # println(plot_data)
 
-#     # connectivity = [0, 1, gsx + 1, gsx, gsy * gsx, gsy * gsx + 1, gsy * gsx + gsx + 1, gsy * gsx + gsx]
-#     #     for c_x in 0:(gsx - 2), c_y in 0:(gsy - 2), c_z in 0:(gsz - 2)
-#     #         if !(c_x == 0 && c_y == 0 && c_z == 0)
-#     #             push!(connectivity, ((c_z * gsy * gsx) + (c_y * gsx) + c_x
-#     #             , (c_z * gsy * gsx) + (c_y * gsx) + c_x + 1
-#     #             , (c_z * gsy * gsx) + ((c_y + 1) * gsx) + c_x + 1
-#     #             , (c_z * gsy * gsx) + ((c_y + 1) * gsx) + c_x
-#     #             , ((c_z + 1) * gsy * gsx) + (c_y * gsx) + c_x
-#     #             , ((c_z + 1) * gsy * gsx) + (c_y * gsx) + c_x + 1
-#     #             , ((c_z + 1) * gsy * gsx) + ((c_y + 1) * gsx) + c_x + 1
-#     #             , ((c_z + 1) * gsy * gsx) + ((c_y + 1) * gsx) + c_x))
-#     #         end
-#     #     end
+    xs = plot_data.x
+    ys = plot_data.y
+    zs = plot_data.z
+    gsx = size(xs)[1]
+    gsy = size(ys)[1]
+    gsz = size(zs)[1]
+    x = [xs[i] for k in 1:gsz for j in 1:gsy for i in 1:gsx]
+    y = [ys[j] for k in 1:gsz for j in 1:gsy for i in 1:gsx]
+    z = [zs[k] for k in 1:gsz for j in 1:gsy for i in 1:gsx]
 
-#     plots = []
-#     for v in 1:size(variable_names)[1]
-#         abs_dat = abs.(vec(plot_data.data[v]))
-#         md = maximum(abs_dat)
-#         alpha = abs_dat / md
-#         push!(plots, Plots.plot(x, y, z, 
-#         fill_z = vec(plot_data.data[v]), 
-#         t = :surface; plot_arguments...))
-#     end
-#     # if show_mesh
-#     # push!(plots, Plots.plot(getmesh(plot_data); plot_arguments...))
-#     # end
+    # connectivity = [0, 1, gsx + 1, gsx, gsy * gsx, gsy * gsx + 1, gsy * gsx + gsx + 1, gsy * gsx + gsx]
+    #     for c_x in 0:(gsx - 2), c_y in 0:(gsy - 2), c_z in 0:(gsz - 2)
+    #         if !(c_x == 0 && c_y == 0 && c_z == 0)
+    #             push!(connectivity, ((c_z * gsy * gsx) + (c_y * gsx) + c_x
+    #             , (c_z * gsy * gsx) + (c_y * gsx) + c_x + 1
+    #             , (c_z * gsy * gsx) + ((c_y + 1) * gsx) + c_x + 1
+    #             , (c_z * gsy * gsx) + ((c_y + 1) * gsx) + c_x
+    #             , ((c_z + 1) * gsy * gsx) + (c_y * gsx) + c_x
+    #             , ((c_z + 1) * gsy * gsx) + (c_y * gsx) + c_x + 1
+    #             , ((c_z + 1) * gsy * gsx) + ((c_y + 1) * gsx) + c_x + 1
+    #             , ((c_z + 1) * gsy * gsx) + ((c_y + 1) * gsx) + c_x))
+    #         end
+    #     end
+    fig = Figure()
+    for v in 1:size(variable_names)[1]
+        volume(fig[intTo2DInt(v)...], x, y, z, vec(plot_data.data[v]))
+    end
 
-#     # Note, for the visualization callback to work for general equation systems
-#     # this layout construction would need to use the if-logic below.
-#     # Currently, there is no use case for this so it is left here as a note.
-#     #
-#     # Determine layout
-#     # if length(plots) <= 3
-#     #   cols = length(plots)
-#     #   rows = 1
-#     # else
-#     #   cols = ceil(Int, sqrt(length(plots)))
-#     #   rows = div(length(plots), cols, RoundUp)
-#     # end
-#     # layout = (rows, cols)
-
-#     # Determine layout
-#     cols = ceil(Int, sqrt(length(plots)))
-#     rows = div(length(plots), cols, RoundUp)
-#     layout = (rows, cols)
-
-#     # Show plot
-#     display(Plots.plot(plots..., layout = layout))
-# end
+    fig
+end
 
 """
     save_plot(plot_data, variable_names;

@@ -2,6 +2,7 @@
 using OrdinaryDiffEq
 using Trixi
 using Plots
+using GLMakie
 
 ###############################################################################
 # semidiscretization of the linear advection equation
