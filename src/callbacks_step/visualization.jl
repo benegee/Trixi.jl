@@ -244,6 +244,12 @@ function show_plot3D(plot_data, variable_names;
     # println(size(plot_data))
     # println(plot_data)
 
+    # println(nameof.(Base.loaded_modules |> values))
+
+    if !(:GLMakie in nameof.(Base.loaded_modules |> values))
+        @warn "Package `GLMakie` not loaded but required by `VisualizationCallback` to visualize 3D results"
+    end
+
     xs = plot_data.x
     ys = plot_data.y
     zs = plot_data.z
@@ -267,12 +273,12 @@ function show_plot3D(plot_data, variable_names;
     #             , ((c_z + 1) * gsy * gsx) + ((c_y + 1) * gsx) + c_x))
     #         end
     #     end
-    fig = Figure()
+    fig = GLMakie.Figure()
     for v in 1:size(variable_names)[1]
-        volume(fig[intTo2DInt(v)...], x, y, z, vec(plot_data.data[v]))
+        GLMakie.volume(fig[intTo2DInt(v)...], plot_data.data[v], algorithm = :mip)
     end
 
-    fig
+    GLMakie.display(fig)
 end
 
 """

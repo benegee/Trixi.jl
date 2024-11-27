@@ -311,6 +311,10 @@ function __init__()
         using .ParaviewCatalyst: ParaviewCatalyst
     end
 
+    @require GLMakie="e9467ef8-e4e7-5192-8a1a-b1aee30e663a" begin
+        using .GLMakie: GLMakie
+    end
+
     # Until Julia v1.9 is the minimum required version for Trixi.jl, we still support Requires.jl
     @static if !isdefined(Base, :get_extension)
         @require Makie="ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a" begin
