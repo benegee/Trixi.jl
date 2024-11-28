@@ -2,6 +2,8 @@
 using OrdinaryDiffEq
 using Trixi
 using ParaviewCatalyst
+using Plots
+using GLMakie
 
 ###############################################################################
 # semidiscretization of the compressible Euler equations
@@ -70,13 +72,15 @@ amr_callback = AMRCallback(semi, amr_controller,
 
 stepsize_callback = StepsizeCallback(cfl = 0.9)
 
+visualization_callback = VisualizationCallback(interval = 20, clims = (0, 1))
+
 catalyst_callback = ParaviewCatalystCallback(interval=100)
 
 callbacks = CallbackSet(summary_callback,
                         analysis_callback, alive_callback,
                         save_restart, save_solution,
                         amr_callback, stepsize_callback,
-                        catalyst_callback);
+                        visualization_callback, catalyst_callback);
 
 ###############################################################################
 # run the simulation

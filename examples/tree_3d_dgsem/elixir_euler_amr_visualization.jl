@@ -61,9 +61,9 @@ save_solution = SaveSolutionCallback(interval = 100,
                                      solution_variables = cons2prim)
 
 amr_controller = ControllerThreeLevel(semi, IndicatorMax(semi, variable = first),
-                                      base_level = 3,
-                                      med_level = 4, med_threshold = 1.05,
-                                      max_level = 5, max_threshold = 1.3)
+                                      base_level = 2,
+                                      med_level = 3, med_threshold = 1.05,
+                                      max_level = 4, max_threshold = 1.3)
 amr_callback = AMRCallback(semi, amr_controller,
                            interval = 5,
                            adapt_initial_condition = true,
@@ -84,5 +84,5 @@ callbacks = CallbackSet(summary_callback,
 
 sol = solve(ode, CarpenterKennedy2N54(williamson_condition = false),
             dt = 1.0, # solve needs some value here but it will be overwritten by the stepsize_callback
-            save_everystep = false, callback = callbacks, maxiters = 2);
+            save_everystep = false, callback = callbacks);
 summary_callback() # print the timer summary
