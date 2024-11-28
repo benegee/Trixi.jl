@@ -5,14 +5,14 @@
 @muladd begin
 #! format: noindent
 
-mutable struct VisualizationCallback{SolutionVariables, VariableNames, PlotDataCreator,
-                                     PlotCreator}
+mutable struct VisualizationCallback{SolutionVariables, VariableNames}
     interval::Int
     solution_variables::SolutionVariables
     variable_names::VariableNames
     show_mesh::Bool
-    plot_data_creator::PlotDataCreator
-    plot_creator::PlotCreator
+    plot_data_creator
+    plot_creator
+    fig
     plot_arguments::Dict{Symbol, Any}
 end
 
@@ -88,6 +88,7 @@ function VisualizationCallback(; interval = 0,
                                show_mesh = false,
                                plot_data_creator = PlotData2D,
                                plot_creator = show_plot,
+                               fig = nothing,
                                plot_arguments...)
     mpi_isparallel() && error("this callback does not work in parallel yet")
 
@@ -95,10 +96,16 @@ function VisualizationCallback(; interval = 0,
         variable_names = String[variable_names]
     end
 
+    if fig == nothing
+        fig = GLMakie.Figure()
+    end
+    GLMakie.display(fig)
+    
     visualization_callback = VisualizationCallback(interval,
                                                    solution_variables, variable_names,
                                                    show_mesh,
                                                    plot_data_creator, plot_creator,
+                                                   fig,
                                                    Dict{Symbol, Any}(plot_arguments))
 
     # Warn users if they create a visualization callback without having loaded the Plots package
@@ -146,10 +153,20 @@ function (visualization_callback::VisualizationCallback)(integrator)
     u_ode = integrator.u
     semi = integrator.p
     mesh, equations, solver, cache = mesh_equations_solver_cache(integrator.p)
-    @unpack plot_arguments, solution_variables, variable_names, show_mesh, plot_data_creator, plot_creator = visualization_callback
-    if ndims(mesh) == 3 
-        plot_data_creator = plot_data_creator == PlotData2D ? PlotData3D : plot_data_creator
-        plot_creator = plot_creator == show_plot ? show_plot3D : plot_creator
+    @unpack plot_arguments, solution_variables, variable_names, show_mesh, plot_data_creator, plot_creator, fig = visualization_callback
+    if ndims(mesh) == 3 && visualization_callback.plot_data_creator == PlotData2D && visualization_callback.plot_creator == show_plot
+        visualization_callback.plot_data_creator = PlotData3D
+        visualization_callback.plot_creator = show_plot3D
+
+        @unpack plot_arguments, solution_variables, variable_names, show_mesh, plot_data_creator, plot_creator, fig = visualization_callback
+        plot_data = plot_data_creator(u_ode, semi, solution_variables = solution_variables)
+        if isempty(variable_names)
+            variable_names = String[keys(plot_data)...]
+        end
+
+        for v in 1:size(variable_names)[1]
+            GLMakie.volume(fig[intTo2DInt(v)...], plot_data.data[v], algorithm = :mip)
+        end
     end
 
     # Extract plot data
@@ -163,7 +180,7 @@ function (visualization_callback::VisualizationCallback)(integrator)
     # Create plot
     plot_creator(plot_data, variable_names;
                  show_mesh = show_mesh, plot_arguments = plot_arguments,
-                 time = integrator.t, timestep = integrator.stats.naccept)
+                 time = integrator.t, timestep = integrator.stats.naccept, fig = fig)
 
     # avoid re-evaluating possible FSAL stages
     u_modified!(integrator, false)
@@ -189,7 +206,7 @@ See also: [`VisualizationCallback`](@ref), [`save_plot`](@ref)
 """
 function show_plot(plot_data, variable_names;
                    show_mesh = true, plot_arguments = Dict{Symbol, Any}(),
-                   time = nothing, timestep = nothing)
+                   time = nothing, timestep = nothing, fig = nothing)
     # Gather subplots
     plots = []
     for v in variable_names
@@ -239,7 +256,7 @@ end
 
 function show_plot3D(plot_data, variable_names;
                     show_mesh = false, plot_arguments = Dict{Symbol, Any}(),
-                    time = nothing, timestep = nothing)
+                    time = nothing, timestep = nothing, fig = nothing)
     # Gather subplots
     # println(size(plot_data))
     # println(plot_data)
@@ -250,35 +267,9 @@ function show_plot3D(plot_data, variable_names;
         @warn "Package `GLMakie` not loaded but required by `VisualizationCallback` to visualize 3D results"
     end
 
-    xs = plot_data.x
-    ys = plot_data.y
-    zs = plot_data.z
-    gsx = size(xs)[1]
-    gsy = size(ys)[1]
-    gsz = size(zs)[1]
-    x = [xs[i] for k in 1:gsz for j in 1:gsy for i in 1:gsx]
-    y = [ys[j] for k in 1:gsz for j in 1:gsy for i in 1:gsx]
-    z = [zs[k] for k in 1:gsz for j in 1:gsy for i in 1:gsx]
-
-    # connectivity = [0, 1, gsx + 1, gsx, gsy * gsx, gsy * gsx + 1, gsy * gsx + gsx + 1, gsy * gsx + gsx]
-    #     for c_x in 0:(gsx - 2), c_y in 0:(gsy - 2), c_z in 0:(gsz - 2)
-    #         if !(c_x == 0 && c_y == 0 && c_z == 0)
-    #             push!(connectivity, ((c_z * gsy * gsx) + (c_y * gsx) + c_x
-    #             , (c_z * gsy * gsx) + (c_y * gsx) + c_x + 1
-    #             , (c_z * gsy * gsx) + ((c_y + 1) * gsx) + c_x + 1
-    #             , (c_z * gsy * gsx) + ((c_y + 1) * gsx) + c_x
-    #             , ((c_z + 1) * gsy * gsx) + (c_y * gsx) + c_x
-    #             , ((c_z + 1) * gsy * gsx) + (c_y * gsx) + c_x + 1
-    #             , ((c_z + 1) * gsy * gsx) + ((c_y + 1) * gsx) + c_x + 1
-    #             , ((c_z + 1) * gsy * gsx) + ((c_y + 1) * gsx) + c_x))
-    #         end
-    #     end
-    fig = GLMakie.Figure()
     for v in 1:size(variable_names)[1]
-        GLMakie.volume(fig[intTo2DInt(v)...], plot_data.data[v], algorithm = :mip)
+        GLMakie.volume!(fig[intTo2DInt(v)...], plot_data.data[v], algorithm = :mip)
     end
-
-    GLMakie.display(fig)
 end
 
 """
