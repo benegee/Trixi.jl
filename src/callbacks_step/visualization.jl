@@ -88,24 +88,18 @@ function VisualizationCallback(; interval = 0,
                                show_mesh = false,
                                plot_data_creator = PlotData2D,
                                plot_creator = show_plot,
-                               fig = nothing,
                                plot_arguments...)
     mpi_isparallel() && error("this callback does not work in parallel yet")
 
     if variable_names isa String
         variable_names = String[variable_names]
     end
-
-    if fig == nothing
-        fig = GLMakie.Figure()
-    end
-    GLMakie.display(fig)
     
     visualization_callback = VisualizationCallback(interval,
                                                    solution_variables, variable_names,
                                                    show_mesh,
                                                    plot_data_creator, plot_creator,
-                                                   fig,
+                                                   nothing,
                                                    Dict{Symbol, Any}(plot_arguments))
 
     # Warn users if they create a visualization callback without having loaded the Plots package
@@ -130,7 +124,32 @@ function initialize!(cb::DiscreteCallback{Condition, Affect!}, u, t,
                      integrator) where {Condition, Affect! <: VisualizationCallback}
     visualization_callback = cb.affect!
 
-    visualization_callback(integrator)
+    u_ode = integrator.u
+    semi = integrator.p
+    mesh, equations, solver, cache = mesh_equations_solver_cache(integrator.p)
+    @trixi_timeit timer() "visualization initialize" begin
+        @unpack plot_arguments, solution_variables, variable_names, show_mesh, plot_data_creator, plot_creator, fig = visualization_callback
+        if ndims(mesh) == 3 && visualization_callback.plot_data_creator == PlotData2D && visualization_callback.plot_creator == show_plot
+            visualization_callback.fig = GLMakie.Figure()
+            visualization_callback.plot_data_creator = PlotData3D
+            visualization_callback.plot_creator = show_plot3D
+
+            @trixi_timeit timer() "visualization initialize plot_data" plot_data = PlotData3D(u_ode, semi, solution_variables = solution_variables)
+            if isempty(variable_names)
+                variable_names = String[keys(plot_data)...]
+            end
+
+            for v in 1:size(variable_names)[1]
+                @trixi_timeit timer() "visualization initialize volume" GLMakie.volume(visualization_callback.fig[intTo2DInt(v)...], plot_data.data[v], algorithm = :mip)
+            end
+            plot_data = nothing
+
+            @trixi_timeit timer() "visualization initialize display" GLMakie.display(visualization_callback.fig)
+            u_modified!(integrator, false)
+        else
+            visualization_callback(integrator)
+        end
+    end
 
     return nothing
 end
@@ -152,25 +171,10 @@ end
 function (visualization_callback::VisualizationCallback)(integrator)
     u_ode = integrator.u
     semi = integrator.p
-    mesh, equations, solver, cache = mesh_equations_solver_cache(integrator.p)
     @unpack plot_arguments, solution_variables, variable_names, show_mesh, plot_data_creator, plot_creator, fig = visualization_callback
-    if ndims(mesh) == 3 && visualization_callback.plot_data_creator == PlotData2D && visualization_callback.plot_creator == show_plot
-        visualization_callback.plot_data_creator = PlotData3D
-        visualization_callback.plot_creator = show_plot3D
-
-        @unpack plot_arguments, solution_variables, variable_names, show_mesh, plot_data_creator, plot_creator, fig = visualization_callback
-        plot_data = plot_data_creator(u_ode, semi, solution_variables = solution_variables)
-        if isempty(variable_names)
-            variable_names = String[keys(plot_data)...]
-        end
-
-        for v in 1:size(variable_names)[1]
-            GLMakie.volume(fig[intTo2DInt(v)...], plot_data.data[v], algorithm = :mip)
-        end
-    end
 
     # Extract plot data
-    plot_data = plot_data_creator(u_ode, semi, solution_variables = solution_variables)
+    @trixi_timeit timer() "visualization plot data" plot_data = plot_data_creator(u_ode, semi, solution_variables = solution_variables)
 
     # If variable names were not specified, plot everything
     if isempty(variable_names)
@@ -178,9 +182,11 @@ function (visualization_callback::VisualizationCallback)(integrator)
     end
 
     # Create plot
-    plot_creator(plot_data, variable_names;
+    @trixi_timeit timer() "visualization create plot" plot_creator(plot_data, variable_names;
                  show_mesh = show_mesh, plot_arguments = plot_arguments,
                  time = integrator.t, timestep = integrator.stats.naccept, fig = fig)
+
+    plot_data = nothing
 
     # avoid re-evaluating possible FSAL stages
     u_modified!(integrator, false)
@@ -270,6 +276,7 @@ function show_plot3D(plot_data, variable_names;
     for v in 1:size(variable_names)[1]
         GLMakie.volume!(fig[intTo2DInt(v)...], plot_data.data[v], algorithm = :mip)
     end
+    plot_data = nothing
 end
 
 """
