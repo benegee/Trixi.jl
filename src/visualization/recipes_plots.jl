@@ -5,6 +5,60 @@
 @muladd begin
 #! format: noindent
 
+# Visualize a single variable in a 3D plot (default: heatmap)
+#
+# Note: This is an experimental feature and may be changed in future releases without notice.
+RecipesBase.@recipe function f(pds::PlotDataSeries{<:AbstractPlotData{3}})
+    @unpack plot_data, variable_id = pds
+    @unpack x, y, z, data, variable_names, orientation_x, orientation_y, orientation_z = plot_data
+
+    # Set geometric properties
+    xlims --> (x[begin], x[end])
+    ylims --> (y[begin], y[end])
+    zlims --> (z[begin], z[end])
+    aspect_ratio --> :equal
+
+    # Set annotation properties
+    legend --> :none
+    title --> variable_names[variable_id]
+    colorbar --> :true
+    xguide --> _get_guide(orientation_x)
+    yguide --> _get_guide(orientation_y)
+    zguide --> _get_guide(orientation_z)
+
+    # Set series properties
+    seriestype --> :surface
+
+    # Return data for plotting
+    x, y, z, data[variable_id]
+end
+
+# Visualize the mesh in a 2D plot
+#
+# Note: This is an experimental feature and may be changed in future releases without notice.
+RecipesBase.@recipe function f(pm::PlotMesh{<:AbstractPlotData{3}})
+    @unpack plot_data = pm
+    @unpack x, y, z, mesh_vertices_x, mesh_vertices_y, mesh_vertices_z = plot_data
+
+    # Set geometric and annotation properties
+    xlims --> (x[begin], x[end])
+    ylims --> (y[begin], y[end])
+    zlims --> (z[begin], z[end])
+    aspect_ratio --> :equal
+    legend --> :none
+    grid --> false
+
+    # Set series properties
+    seriestype --> :path
+    linecolor --> :grey
+    linewidth --> 1
+
+    # Return data for plotting
+    mesh_vertices_x, mesh_vertices_y, mesh_vertices_z
+end
+
+
+
 # Visualize a single variable in a 2D plot (default: heatmap)
 #
 # Note: This is an experimental feature and may be changed in future releases without notice.

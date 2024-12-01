@@ -307,6 +307,85 @@ function adapt_to_mesh_level(sol::TrixiODESolution, level)
     adapt_to_mesh_level(sol.u[end], sol.prob.p, level)
 end
 
+# Extract data from a 3D DG solution and prepare it for visualization as a heatmap/contour plot.
+#
+# Returns a tuple with
+# - x coordinates
+# - y coordinates
+# - z coordinates
+# - nodal 3D data
+# - x vertices for mesh visualization
+# - y vertices for mesh visualization
+# - z vertices for mesh visualization
+#
+# Note: This is a low-level function that is not considered as part of Trixi.jl's interface and may
+#       thus be changed in future releases.
+function get_data_3d(center_level_0, length_level_0, coordinates, levels,
+                     unstructured_data, n_nodes,
+                     grid_lines = false, max_supported_level = 11, nvisnodes = nothing)
+    # Determine resolution for data interpolation
+    max_level = maximum(levels)
+    if max_level > max_supported_level
+        error("Maximum refinement level $max_level is higher than " *
+              "maximum supported level $max_supported_level")
+    end
+    max_available_nodes_per_finest_element = 2^(max_supported_level - max_level)
+    if nvisnodes === nothing
+        max_nvisnodes = 2 * n_nodes
+    elseif nvisnodes == 0
+        max_nvisnodes = n_nodes
+    else
+        max_nvisnodes = nvisnodes
+    end
+    nvisnodes_at_max_level = min(max_available_nodes_per_finest_element, max_nvisnodes)
+    resolution = nvisnodes_at_max_level * 2^max_level
+    nvisnodes_per_level = [2^(max_level - level) * nvisnodes_at_max_level
+                           for level in 0:max_level]
+    # nvisnodes_per_level is an array (accessed by "level + 1" to accommodate
+    # level-0-cell) that contains the number of visualization nodes for any
+    # refinement level to visualize on an equidistant grid
+
+    # Normalize element coordinates: move center to (0, 0) and domain size to [-1, 1]²
+    n_elements = length(levels)
+    normalized_coordinates = similar(coordinates)
+    for element_id in 1:n_elements
+        @views normalized_coordinates[:, element_id] .= ((coordinates[:, element_id] .-
+                                                          center_level_0) ./
+                                                         (length_level_0 / 2))
+    end
+
+    # Interpolate unstructured DG data to structured data
+    (structured_data = unstructured2structured3D(unstructured_data,
+                                                 normalized_coordinates,
+                                                 levels, resolution,
+                                                 nvisnodes_per_level))
+
+    # Interpolate cell-centered values to node-centered values
+    node_centered_data = cell2node3D(structured_data)
+
+    # Determine axis coordinates for contour plot
+    xs = collect(range(-1, 1, length = resolution + 1)) .* length_level_0 / 2 .+
+         center_level_0[1]
+    ys = collect(range(-1, 1, length = resolution + 1)) .* length_level_0 / 2 .+
+         center_level_0[2]
+    zs = collect(range(-1, 1, length = resolution + 1)) .* length_level_0 / 2 .+
+         center_level_0[3]
+
+    # Determine element vertices to plot grid lines
+    if grid_lines
+        mesh_vertices_x, mesh_vertices_y, mesh_vertices_z = calc_vertices3D(coordinates,
+                                                                          levels,
+                                                                          length_level_0)
+    else
+        mesh_vertices_x = Vector{Float64}(undef, 0)
+        mesh_vertices_y = Vector{Float64}(undef, 0)
+        mesh_vertices_z = Vector{Float64}(undef, 0)
+    end
+
+    return xs, ys, zs, node_centered_data, mesh_vertices_x, mesh_vertices_y,
+           mesh_vertices_z
+end
+
 # Extract data from a 2D/3D DG solution and prepare it for visualization as a heatmap/contour plot.
 #
 # Returns a tuple with
@@ -479,6 +558,92 @@ function get_unstructured_data(u, solution_variables, mesh, equations, solver, c
     end
 
     return unstructured_data
+end
+
+# Convert cell-centered values to node-centered values by averaging over all
+# four neighbors and making use of the periodicity of the solution
+#
+# Note: This is a low-level function that is not considered as part of Trixi.jl's interface and may
+#       thus be changed in future releases.
+function cell2node3D(cell_centered_data)
+    # Create temporary data structure to make the averaging algorithm as simple
+    # as possible (by using a ghost layer)
+    tmp = similar(first(cell_centered_data),
+                  size(first(cell_centered_data)) .+ (2, 2, 2))
+
+    # Create output data structure
+    resolution_in, _, _ = size(first(cell_centered_data))
+    resolution_out = resolution_in + 1
+    node_centered_data = [Array{Float64, 3}(undef, resolution_out, resolution_out,
+                                            resolution_out)
+                          for _ in eachindex(cell_centered_data)]
+
+    for (cell_data, node_data) in zip(cell_centered_data, node_centered_data)
+        # Fill center with original data
+        tmp[2:(end - 1), 2:(end - 1), 2:(end - 1)] .= cell_data
+
+        # Fill faces with opposite data (periodic domain)
+        # x-direction
+        tmp[1, 2:(end - 1), 2:(end - 1)] .= cell_data[end, :, :]
+        tmp[end, 2:(end - 1), 2:(end - 1)] .= cell_data[1, :, :]
+        # y-direction
+        tmp[2:(end - 1), 1, 2:(end - 1)] .= cell_data[:, end, :]
+        tmp[2:(end - 1), end, 2:(end - 1)] .= cell_data[:, 1, :]
+        # z-direction
+        tmp[2:(end - 1), 2:(end - 1), 1] .= cell_data[:, :, end]
+        tmp[2:(end - 1), 2:(end - 1), end] .= cell_data[:, :, 1]
+
+        # Edges
+        # x-direction
+        tmp[2:(end - 1), 1, 1] .= cell_data[:, end, 1]
+        tmp[2:(end - 1), end, 1] .= cell_data[:, 1, 1]
+        tmp[2:(end - 1), 1, end] .= cell_data[:, end, end]
+        tmp[2:(end - 1), end, end] .= cell_data[:, 1, end]
+        # y-direction
+        tmp[1, 2:(end - 1), 1] .= cell_data[end, :, 1]
+        tmp[end, 2:(end - 1), 1] .= cell_data[1, :, 1]
+        tmp[1, 2:(end - 1), end] .= cell_data[end, :, end]
+        tmp[end, 2:(end - 1), end] .= cell_data[1, :, end]
+        # z-direction
+        tmp[1, 1, 2:(end - 1)] .= cell_data[end, 1, :]
+        tmp[end, 1, 2:(end - 1)] .= cell_data[1, 1, :]
+        tmp[1, end, 2:(end - 1)] .= cell_data[end, end, :]
+        tmp[end, end, 2:(end - 1)] .= cell_data[1, end, :]
+
+        # Corners
+        tmp[1, 1, 1] = cell_data[end, end, end]
+        tmp[end, 1, 1] = cell_data[1, end, end]
+        tmp[1, end, 1] = cell_data[end, 1, end]
+        tmp[end, end, 1] = cell_data[1, 1, end]
+        tmp[1, 1, end] = cell_data[end, end, 1]
+        tmp[end, 1, end] = cell_data[1, end, 1]
+        tmp[1, end, end] = cell_data[end, 1, 1]
+        tmp[end, end, end] = cell_data[1, 1, 1]
+
+        # Obtain node-centered value by averaging over neighboring cell-centered values
+        for k in 1:resolution_out
+            for j in 1:resolution_out
+                for i in 1:resolution_out
+                    node_data[i, j, k] = (tmp[i, j, k] +
+                                          tmp[i + 1, j, k] +
+                                          tmp[i, j + 1, k] +
+                                          tmp[i + 1, j + 1, k] +
+                                          tmp[i, j, k + 1] +
+                                          tmp[i + 1, j, k + 1] +
+                                          tmp[i, j + 1, k + 1] +
+                                          tmp[i + 1, j + 1, k + 1]) / 8
+                end
+            end
+        end
+    end
+
+    # Transpose
+    # TODO ???
+    for (index, data) in enumerate(node_centered_data)
+        node_centered_data[index] = permutedims(data, (3, 2, 1))
+    end
+
+    return node_centered_data
 end
 
 # Convert cell-centered values to node-centered values by averaging over all
@@ -1168,6 +1333,72 @@ end
 # Interpolate unstructured DG data to structured data (cell-centered)
 #
 # This function takes DG data in an unstructured, Cartesian layout and converts it to a uniformly
+# distributed 3D layout.
+#
+# Note: This is a low-level function that is not considered as part of Trixi.jl's interface and may
+#       thus be changed in future releases.
+function unstructured2structured3D(unstructured_data, normalized_coordinates,
+                                   levels, resolution, nvisnodes_per_level)
+    # Extract data shape information
+    n_nodes_in, _, _, n_elements, n_variables = size(unstructured_data)
+
+    # Get node coordinates for DG locations on reference element
+    nodes_in, _ = gauss_lobatto_nodes_weights(n_nodes_in)
+
+    # Calculate interpolation vandermonde matrices for each level
+    max_level = length(nvisnodes_per_level) - 1
+    vandermonde_per_level = []
+    for l in 0:max_level
+        n_nodes_out = nvisnodes_per_level[l + 1]
+        dx = 2 / n_nodes_out
+        nodes_out = collect(range(-1 + dx / 2, 1 - dx / 2, length = n_nodes_out))
+        push!(vandermonde_per_level,
+              polynomial_interpolation_matrix(nodes_in, nodes_out))
+    end
+
+    # For each element, calculate index position at which to insert data in global data structure
+    lower_left_index = element2index3D(normalized_coordinates, levels, resolution,
+                                       nvisnodes_per_level)
+
+    # Create output data structure
+    structured = [Array{Float64, 3}(undef, resolution, resolution, resolution)
+                  for _ in 1:n_variables]
+
+    # For each variable, interpolate element data and store to global data structure
+    for v in 1:n_variables
+        # Reshape data array for use in multiply_dimensionwise function
+        reshaped_data = reshape(unstructured_data[:, :, :, :, v], 1, n_nodes_in,
+                                n_nodes_in, n_nodes_in, n_elements)
+
+        for element_id in 1:n_elements
+            # Extract level for convenience
+            level = levels[element_id]
+
+            # Determine target indices
+            n_nodes_out = nvisnodes_per_level[level + 1]
+            first = lower_left_index[:, element_id]
+            last = first .+ (n_nodes_out - 1)
+
+            # Interpolate data
+            vandermonde = vandermonde_per_level[level + 1]
+            structured[v][first[1]:last[1], first[2]:last[2], first[3]:last[3]] .= (reshape(multiply_dimensionwise(vandermonde,
+                                                                                                                   reshaped_data[:,
+                                                                                                                                 :,
+                                                                                                                                 :,
+                                                                                                                                 :,
+                                                                                                                                 element_id]),
+                                                                                            n_nodes_out,
+                                                                                            n_nodes_out,
+                                                                                            n_nodes_out))
+        end
+    end
+
+    return structured
+end
+
+# Interpolate unstructured DG data to structured data (cell-centered)
+#
+# This function takes DG data in an unstructured, Cartesian layout and converts it to a uniformly
 # distributed 2D layout.
 #
 # Note: This is a low-level function that is not considered as part of Trixi.jl's interface and may
@@ -1233,6 +1464,55 @@ end
 #
 # Note: This is a low-level function that is not considered as part of Trixi.jl's interface and may
 #       thus be changed in future releases.
+function element2index3D(normalized_coordinates, levels, resolution, nvisnodes_per_level)
+    @assert size(normalized_coordinates, 1)==3 "only works in 3D"
+
+    n_elements = length(levels)
+
+    # First, determine lower left front coordinate for all cells
+    dx = 2 / resolution
+    ndim = 3
+    lower_left_front_coordinate = Array{Float64}(undef, ndim, n_elements)
+    for element_id in 1:n_elements
+        nvisnodes = nvisnodes_per_level[levels[element_id] + 1]
+        lower_left_front_coordinate[1, element_id] = (normalized_coordinates[1, element_id] -
+                                                (nvisnodes - 1) / 2 * dx)
+        lower_left_front_coordinate[2, element_id] = (normalized_coordinates[2, element_id] -
+                                                (nvisnodes - 1) / 2 * dx)
+        lower_left_front_coordinate[3, element_id] = (normalized_coordinates[3, element_id] -
+                                                (nvisnodes - 1) / 2 * dx)
+    end
+
+    # Then, convert coordinate to global index
+    indices = coordinate2index3D(lower_left_front_coordinate, resolution)
+
+    return indices
+end
+
+# Find 3D array index for a 3-tuple of normalized, cell-centered coordinates (i.e., in [-1,1])
+#
+# Note: This is a low-level function that is not considered as part of Trixi.jl's interface and may
+#       thus be changed in future releases.
+function coordinate2index3D(coordinate, resolution::Integer)
+    # Calculate 1D normalized coordinates
+    dx = 2 / resolution
+    mesh_coordinates = collect(range(-1 + dx / 2, 1 - dx / 2, length = resolution))
+
+    # Find index
+    id_x = searchsortedfirst.(Ref(mesh_coordinates), coordinate[1, :],
+                              lt = (x, y) -> x .< y .- dx / 2)
+    id_y = searchsortedfirst.(Ref(mesh_coordinates), coordinate[2, :],
+                            lt = (x, y) -> x .< y .- dx / 2)
+    id_z = searchsortedfirst.(Ref(mesh_coordinates), coordinate[3, :],
+                                lt = (x, y) -> x .< y .- dx / 2)
+    return transpose(hcat(id_x, id_y,id_z))
+end
+
+# For a given normalized element coordinate, return the index of its lower left
+# contribution to the global data structure
+#
+# Note: This is a low-level function that is not considered as part of Trixi.jl's interface and may
+#       thus be changed in future releases.
 function element2index(normalized_coordinates, levels, resolution, nvisnodes_per_level)
     @assert size(normalized_coordinates, 1)==2 "only works in 2D"
 
@@ -1271,6 +1551,146 @@ function coordinate2index(coordinate, resolution::Integer)
     id_y = searchsortedfirst.(Ref(mesh_coordinates), coordinate[2, :],
                               lt = (x, y) -> x .< y .- dx / 2)
     return transpose(hcat(id_x, id_y))
+end
+
+# Calculate the vertices for each mesh cell such that it can be visualized as a closed box
+#
+# Note: This is a low-level function that is not considered as part of Trixi.jl's interface and may
+#       thus be changed in future releases.
+function calc_vertices3D(coordinates, levels, length_level_0)
+    ndim = size(coordinates, 1)
+
+    # Initialize output arrays
+    n_elements = length(levels)
+    n_points_per_element = 2^ndim + 2
+    x = Vector{Float64}(undef, n_points_per_element * n_elements)
+    y = Vector{Float64}(undef, n_points_per_element * n_elements)
+    z = Vector{Float64}(undef, n_points_per_element * n_elements)
+
+    # Calculate vertices for all coordinates at once
+    for element_id in 1:n_elements
+        length = length_level_0 / 2^levels[element_id]
+        index = n_points_per_element * (element_id - 1)
+        x[index + 1] = coordinates[1, element_id] - 1 / 2 * length
+        x[index + 2] = coordinates[1, element_id] + 1 / 2 * length
+        x[index + 3] = coordinates[1, element_id] + 1 / 2 * length
+        x[index + 4] = coordinates[1, element_id] - 1 / 2 * length
+        x[index + 5] = coordinates[1, element_id] - 1 / 2 * length
+        x[index + 6] = coordinates[1, element_id] + 1 / 2 * length
+        x[index + 7] = coordinates[1, element_id] + 1 / 2 * length
+        x[index + 8] = coordinates[1, element_id] - 1 / 2 * length
+        x[index + 9] = coordinates[1, element_id] - 1 / 2 * length
+        x[index + 10] = NaN
+
+        y[index + 1] = coordinates[2, element_id] - 1 / 2 * length
+        y[index + 2] = coordinates[2, element_id] - 1 / 2 * length
+        y[index + 3] = coordinates[2, element_id] + 1 / 2 * length
+        y[index + 4] = coordinates[2, element_id] + 1 / 2 * length
+        y[index + 5] = coordinates[2, element_id] - 1 / 2 * length
+        y[index + 6] = coordinates[2, element_id] - 1 / 2 * length
+        y[index + 7] = coordinates[2, element_id] + 1 / 2 * length
+        y[index + 8] = coordinates[2, element_id] + 1 / 2 * length
+        y[index + 9] = coordinates[2, element_id] - 1 / 2 * length
+        y[index + 10] = NaN
+
+        z[index + 1] = coordinates[3, element_id] - 1 / 2 * length
+        z[index + 2] = coordinates[3, element_id] - 1 / 2 * length
+        z[index + 3] = coordinates[3, element_id] - 1 / 2 * length
+        z[index + 4] = coordinates[3, element_id] - 1 / 2 * length
+        z[index + 5] = coordinates[3, element_id] + 1 / 2 * length
+        z[index + 6] = coordinates[3, element_id] + 1 / 2 * length
+        z[index + 7] = coordinates[3, element_id] + 1 / 2 * length
+        z[index + 8] = coordinates[3, element_id] + 1 / 2 * length
+        z[index + 9] = coordinates[3, element_id] - 1 / 2 * length
+        z[index + 10] = NaN
+    end
+
+    return x, y, z
+end
+
+# Calculate the vertices to plot each grid line for StructuredMesh
+#
+# Note: This is a low-level function that is not considered as part of Trixi.jl's interface and may
+#       thus be changed in future releases.
+function calc_vertices3D(node_coordinates, mesh)
+    #this function uses pieces of ai-generated code
+    @unpack cells_per_dimension = mesh
+
+    @assert size(node_coordinates, 1) == 3 "only works in 3D"
+
+    linear_indices = LinearIndices(size(mesh))
+
+    # Initialize output arrays
+    n_lines = ((cells_per_dimension[2] + 1) * (cells_per_dimension[3] + 1) +  # x-direction
+          (cells_per_dimension[1] + 1) * (cells_per_dimension[3] + 1) +  # y-direction
+          (cells_per_dimension[1] + 1) * (cells_per_dimension[2] + 1))    # z-direction
+    max_length = maximum(cells_per_dimension)
+    n_nodes = size(node_coordinates, 2)
+
+    x = fill(NaN, max_length * (n_nodes - 1) + 1, n_lines)
+    y = fill(NaN, max_length * (n_nodes - 1) + 1, n_lines)
+    z = fill(NaN, max_length * (n_nodes - 1) + 1, n_lines)
+
+    line_index = 1
+
+    # Lines in x-direction
+    for cell_y in axes(mesh, 2), cell_z in axes(mesh, 3)
+        i = 1
+        for cell_x in axes(mesh, 1)
+            for node in 1:(n_nodes - 1)
+                idx = linear_indices[cell_x, cell_y, cell_z]
+                x[i, line_index] = node_coordinates[1, node, 1, idx]
+                y[i, line_index] = node_coordinates[2, node, 1, idx]
+                z[i, line_index] = node_coordinates[3, node, 1, idx]
+                i += 1
+            end
+        end
+        # Last point on line
+        x[i, line_index] = node_coordinates[1, end, 1, linear_indices[end, cell_y, cell_z]]
+        y[i, line_index] = node_coordinates[2, end, 1, linear_indices[end, cell_y, cell_z]]
+        z[i, line_index] = node_coordinates[3, end, 1, linear_indices[end, cell_y, cell_z]]
+        line_index += 1
+    end
+
+    # Lines in y-direction
+    for cell_x in axes(mesh, 1), cell_z in axes(mesh, 3)
+        i = 1
+        for cell_y in axes(mesh, 2)
+            for node in 1:(n_nodes - 1)
+                idx = linear_indices[cell_x, cell_y, cell_z]
+                x[i, line_index] = node_coordinates[1, 1, node, idx]
+                y[i, line_index] = node_coordinates[2, 1, node, idx]
+                z[i, line_index] = node_coordinates[3, 1, node, idx]
+                i += 1
+            end
+        end
+        # Last point on line
+        x[i, line_index] = node_coordinates[1, 1, end, linear_indices[cell_x, end, cell_z]]
+        y[i, line_index] = node_coordinates[2, 1, end, linear_indices[cell_x, end, cell_z]]
+        z[i, line_index] = node_coordinates[3, 1, end, linear_indices[cell_x, end, cell_z]]
+        line_index += 1
+    end
+
+    # Lines in z-direction
+    for cell_x in axes(mesh, 1), cell_y in axes(mesh, 2)
+        i = 1
+        for cell_z in axes(mesh, 3)
+            for node in 1:(n_nodes - 1)
+                idx = linear_indices[cell_x, cell_y, cell_z]
+                x[i, line_index] = node_coordinates[1, 1, node, idx]
+                y[i, line_index] = node_coordinates[2, 1, node, idx]
+                z[i, line_index] = node_coordinates[3, 1, node, idx]
+                i += 1
+            end
+        end
+        # Last point on line
+        x[i, line_index] = node_coordinates[1, 1, end, linear_indices[cell_x, cell_y, end]]
+        y[i, line_index] = node_coordinates[2, 1, end, linear_indices[cell_x, cell_y, end]]
+        z[i, line_index] = node_coordinates[3, 1, end, linear_indices[cell_x, cell_y, end]]
+        line_index += 1
+    end
+
+    return x, y, z
 end
 
 # Calculate the vertices for each mesh cell such that it can be visualized as a closed box
