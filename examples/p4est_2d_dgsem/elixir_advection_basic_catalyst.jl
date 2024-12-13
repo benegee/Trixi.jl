@@ -3,7 +3,7 @@
 
 using OrdinaryDiffEq
 using Trixi
-using ParaviewCatalyst
+using ParaViewCatalyst
 
 ###############################################################################
 # semidiscretization of the linear advection equation
@@ -48,7 +48,7 @@ save_solution = SaveSolutionCallback(interval = 100,
 # The StepsizeCallback handles the re-calculation of the maximum Δt after each time step
 stepsize_callback = StepsizeCallback(cfl = 1.6)
 
-catalyst_callback = ParaviewCatalystCallback(interval=100)
+catalyst_callback = ParaViewCatalystCallback(interval=100)
 
 # Create a CallbackSet to collect all callbacks such that they can be passed to the ODE solver
 callbacks = CallbackSet(summary_callback, analysis_callback, save_solution,

@@ -1,7 +1,7 @@
 
 using OrdinaryDiffEq
 using Trixi
-using ParaviewCatalyst
+using ParaViewCatalyst
 
 ###############################################################################
 # semidiscretization of the compressible Euler equations
@@ -70,7 +70,7 @@ amr_callback = AMRCallback(semi, amr_controller,
 
 stepsize_callback = StepsizeCallback(cfl = 0.9)
 
-catalyst_callback = ParaviewCatalystCallback(interval=100)
+catalyst_callback = ParaViewCatalystCallback(interval=100)
 
 callbacks = CallbackSet(summary_callback,
                         analysis_callback, alive_callback,

@@ -5,7 +5,7 @@
 @muladd begin
 #! format: noindent
 
-mutable struct ParaviewCatalystCallback
+mutable struct ParaViewCatalystCallback
     interval::Int
     nvisnodes
     catalyst_pipeline
@@ -15,18 +15,18 @@ end
 function Base.show(io::IO,
                    cb::DiscreteCallback{Condition, Affect!}) where {Condition,
                                                                     Affect! <:
-                                                                    ParaviewCatalystCallback
+                                                                    ParaViewCatalystCallback
                                                                     }
     visualization_callback = cb.affect!
     @unpack interval = visualization_callback
-    print(io, "ParaviewCatalystCallback(",
+    print(io, "ParaViewCatalystCallback(",
           "interval=", interval,")")
 end
 
 function Base.show(io::IO, ::MIME"text/plain",
                    cb::DiscreteCallback{Condition, Affect!}) where {Condition,
                                                                     Affect! <:
-                                                                    ParaviewCatalystCallback
+                                                                    ParaViewCatalystCallback
                                                                     }
     if get(io, :compact, false)
         show(io, cb)
@@ -40,37 +40,37 @@ function Base.show(io::IO, ::MIME"text/plain",
             "interpolation" => visualization_callback.interpolation,
             
         ]
-        summary_box(io, "ParaviewCatalystCallback", setup)
+        summary_box(io, "ParaViewCatalystCallback", setup)
     end
 end
 
 """
-    ParaviewCatalystCallback(; interval=0, nvisnodes = nothing, catalyst_pipeline = nothing
+    ParaViewCatalystCallback(; interval=0, nvisnodes = nothing, catalyst_pipeline = nothing
                             )
 
 Create a callback that visualizes results during a simulation using Paraview, also known as *in-situ
 visualization*. Make sure that your downloaded Paraview Installation includes the Catalyst library and
 make sure to set the PARAVIEW_CATALYST_PATH Environment Variable to the path of the Catalyst lib.
-You can also specify a path for a custom catalyst pipeline to be used instead of the default by ParaviewCatalyst.jl
+You can also specify a path for a custom catalyst pipeline to be used instead of the default by ParaViewCatalyst.jl
 
 !!! warning "Experimental implementation"
     This is an experimental feature and may change in any future releases.
 """
-function ParaviewCatalystCallback(; interval = 0, nvisnodes = nothing, catalyst_pipeline = nothing, interpolation = true
+function ParaViewCatalystCallback(; interval = 0, nvisnodes = nothing, catalyst_pipeline = nothing, interpolation = true
                                )
 
-    # ParaviewCatalyst.catalyst_initialize(libpath="/home/nico/Paraview/ParaView-5.13.0-MPI-Linux-Python3.10-x86_64/lib/catalyst")
+    # ParaViewCatalyst.catalyst_initialize(libpath="/home/nico/Paraview/ParaView-5.13.0-MPI-Linux-Python3.10-x86_64/lib/catalyst")
     if catalyst_pipeline === nothing
-        ParaviewCatalyst.catalyst_initialize()
+        ParaViewCatalyst.catalyst_initialize()
     else
-        ParaviewCatalyst.catalyst_initialize(catalyst_pipeline=catalyst_pipeline)
+        ParaViewCatalyst.catalyst_initialize(catalyst_pipeline=catalyst_pipeline)
     end
 
-    visualization_callback = ParaviewCatalystCallback(interval, nvisnodes, catalyst_pipeline, interpolation)
+    visualization_callback = ParaViewCatalystCallback(interval, nvisnodes, catalyst_pipeline, interpolation)
 
-    # Warn users if they create a ParaviewCatalystCallback without having loaded the ParaviewCatalyst package
-    if !(:ParaviewCatalyst in nameof.(Base.loaded_modules |> values))
-        @warn "Package `ParaviewCatalyst` not loaded but required by `ParaviewCatalystCallback` to visualize results"
+    # Warn users if they create a ParaViewCatalystCallback without having loaded the ParaViewCatalyst package
+    if !(:ParaViewCatalyst in nameof.(Base.loaded_modules |> values))
+        @warn "Package `ParaViewCatalyst` not loaded but required by `ParaViewCatalystCallback` to visualize results"
     end
 
     DiscreteCallback(visualization_callback, visualization_callback, # the first one is the condition, the second the affect!
@@ -79,7 +79,7 @@ function ParaviewCatalystCallback(; interval = 0, nvisnodes = nothing, catalyst_
 end
 
 function initialize!(cb::DiscreteCallback{Condition, Affect!}, u, t,
-                     integrator) where {Condition, Affect! <: ParaviewCatalystCallback}
+                     integrator) where {Condition, Affect! <: ParaViewCatalystCallback}
     visualization_callback = cb.affect!
 
     visualization_callback(integrator)
@@ -88,7 +88,7 @@ function initialize!(cb::DiscreteCallback{Condition, Affect!}, u, t,
 end
 
 # this method is called to determine whether the callback should be activated
-function (visualization_callback::ParaviewCatalystCallback)(u, t, integrator)
+function (visualization_callback::ParaViewCatalystCallback)(u, t, integrator)
     @unpack interval = visualization_callback
 
     # With error-based step size control, some steps can be rejected. Thus,
@@ -102,7 +102,7 @@ end
 
 function create_conduit_node(integrator, mesh::TreeMesh, equations, solver, caches, nvisnodes)
     #creating the conduit node, that will later be passed to paraview
-    node = ParaviewCatalyst.ConduitNode() 
+    node = ParaViewCatalyst.ConduitNode() 
 
     #information about the problem being solved
     nvars = nvariables(equations)
@@ -206,7 +206,7 @@ end
 
 function create_conduit_node(integrator, mesh::P4estMesh, equations, solver, cache, nvisnodes)
     #creating the conduit node, that will later be passed to paraview
-    node = ParaviewCatalyst.ConduitNode()
+    node = ParaViewCatalyst.ConduitNode()
 
     #information about the problem being solved
     n_visnodes = (nvisnodes === nothing) ? 2 * nnodes(solver) : nvisnodes
@@ -312,7 +312,7 @@ end
 
 function create_conduit_node_no_interpolation(integrator, mesh::TreeMesh, equations, solver, cache)
     #creating the conduit node, that will later be passed to paraview
-    node = ParaviewCatalyst.ConduitNode() 
+    node = ParaViewCatalyst.ConduitNode() 
 
     #information about the problem being solved
     nvars = nvariables(equations)
@@ -423,7 +423,7 @@ end
 
 function create_conduit_node_no_interpolation(integrator, mesh::P4estMesh, equations, solver, cache)
     #creating the conduit node, that will later be passed to paraview
-    node = ParaviewCatalyst.ConduitNode()
+    node = ParaViewCatalyst.ConduitNode()
 
     #information about the problem being solved
     n_visnodes = nnodes(solver)
@@ -512,7 +512,7 @@ function create_conduit_node_no_interpolation(integrator, mesh::P4estMesh, equat
 end
 
 # this method is called when the callback is activated
-function (visualization_callback::ParaviewCatalystCallback)(integrator)
+function (visualization_callback::ParaViewCatalystCallback)(integrator)
     #extracting problem data from the integrator
     mesh, equations, solver, cache = mesh_equations_solver_cache(integrator.p)
 
@@ -526,7 +526,7 @@ function (visualization_callback::ParaviewCatalystCallback)(integrator)
     create_conduit_node_no_interpolation(integrator, mesh, equations, solver, cache))
     #passing the problem data to a function fitting the right mesh, to create a conduit node, which is then passed to paraview
     @trixi_timeit timer() "catalyst execute" begin
-        ParaviewCatalyst.catalyst_execute(node)
+        ParaViewCatalyst.catalyst_execute(node)
     end
 
     return nothing

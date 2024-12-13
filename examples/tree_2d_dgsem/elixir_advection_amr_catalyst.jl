@@ -1,7 +1,7 @@
 
 using OrdinaryDiffEq
 using Trixi
-using ParaviewCatalyst
+using ParaViewCatalyst
 
 ###############################################################################
 # semidiscretization of the linear advection equation
@@ -50,7 +50,7 @@ amr_callback = AMRCallback(semi, amr_controller,
 
 stepsize_callback = StepsizeCallback(cfl = 1.6)
 
-catalyst_callback = ParaviewCatalystCallback(interval=10)
+catalyst_callback = ParaViewCatalystCallback(interval=10)
 
 callbacks = CallbackSet(summary_callback,
                         analysis_callback, alive_callback,

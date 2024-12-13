@@ -261,7 +261,7 @@ export SemidiscretizationCoupled
 
 export SummaryCallback, SteadyStateCallback, AnalysisCallback, AliveCallback,
        SaveRestartCallback, SaveSolutionCallback, TimeSeriesCallback, VisualizationCallback,
-       AveragingCallback, ParaviewCatalystCallback,
+       AveragingCallback, ParaViewCatalystCallback,
        AMRCallback, StepsizeCallback,
        GlmSpeedCallback, LBMCollisionCallback, EulerAcousticsCouplingCallback,
        TrivialCallback, AnalysisCallbackCoupled,
@@ -305,10 +305,10 @@ function __init__()
         using .Plots: Plots
     end
 
-    # Enable features that depend on the availability of the ParaviewCatalyst package
+    # Enable features that depend on the availability of the ParaViewCatalyst package
     # TODO: extension?
-    @require ParaviewCatalyst="0fa3a46a-29f8-4c04-a671-08df7e71e505" begin
-        using .ParaviewCatalyst: ParaviewCatalyst
+    @require ParaViewCatalyst="0fa3a46a-29f8-4c04-a671-08df7e71e505" begin
+        using .ParaViewCatalyst: ParaViewCatalyst
     end
 
     @require GLMakie="e9467ef8-e4e7-5192-8a1a-b1aee30e663a" begin

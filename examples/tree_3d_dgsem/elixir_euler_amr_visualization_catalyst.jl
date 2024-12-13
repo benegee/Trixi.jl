@@ -1,7 +1,7 @@
 
 using OrdinaryDiffEq
 using Trixi
-using ParaviewCatalyst
+using ParaViewCatalyst
 using Plots
 using GLMakie
 
@@ -74,7 +74,7 @@ stepsize_callback = StepsizeCallback(cfl = 0.9)
 
 visualization_callback = VisualizationCallback(interval = 20, clims = (0, 1))
 
-catalyst_callback = ParaviewCatalystCallback(interval=100)
+catalyst_callback = ParaViewCatalystCallback(interval=100)
 
 callbacks = CallbackSet(summary_callback,
                         analysis_callback, alive_callback,
