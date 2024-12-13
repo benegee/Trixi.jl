@@ -407,7 +407,7 @@ With a Paraview Installation containing the Catalyst Library, you can use the Pa
 ```
 + `interval` determines the amount of timesteps between calls of this callback
 + `nvisnodes` determines the number of visualization nodes. 
-  + Paraview can not handle the Polynomials for each grid cell, so an interpolation is neccessary
+  + Paraview can not handle the Polynomials for each grid cell, so an interpolation is necessary
   + Visualization nodes are the nodes per dimension in each cell
     + For example in a 3D Plot each cell has a nxnxn array of visualization nodes
 + `catalyst_pipeline` a path to the catalyst pipeline if the default should not be used
