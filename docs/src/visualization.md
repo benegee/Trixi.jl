@@ -399,6 +399,48 @@ below:
   <style>.embed-container { position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; max-width: 100%; } .embed-container iframe, .embed-container object, .embed-container embed { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }</style><div class='embed-container'><iframe src='https://www.youtube-nocookie.com/embed/UZtrqeDY1Fs' frameborder='0' allowfullscreen></iframe></div>
 ```
 
+### Visualizing results during a simulation using Paraview Catalyst
+With a Paraview Installation containing the Catalyst Library, you can use the ParaViewCatalystCallback to visualise your results in Paraview during the simulation.
+
+```julia
+    ParaViewCatalystCallback(; interval=0, nvisnodes = nothing, catalyst_pipeline = nothing)
+```
++ `interval` determines the amount of timesteps between calls of this callback
++ `nvisnodes` determines the number of visualization nodes. 
+  + Paraview can not handle the Polynomials for each grid cell, so an interpolation is necessary
+  + Visualization nodes are the nodes per dimension in each cell
+    + For example in a 3D Plot each cell has a nxnxn array of visualization nodes
++ `catalyst_pipeline` a path to the catalyst pipeline if the default should not be used
+  + The starting view shown by Paraview is determined by a python pipeline
+  + ParaViewCatalyst.jl includes a standard `catalyst_pipeline.py`
+  + In principle your current view in Paraview can be exported as a pipeline using File->Save Catalyst State...
+  but in practice the resulting pipelines did not work in our testing.
+  ```python
+  def catalyst_execute(info):
+    global input
+    global options
+    input.UpdatePipeline()
+    contour1.UpdatePipeline()
+    SaveExtractsUsingCatalystOptions(options)
+  ```
+  a block like this needed to replace the bottom of the exported pipeline, to get it working for us
+
+
+To be able to use the ParaViewCatalystCallback you need
++ A Paraview Installation containing the Catalyst Library
++ The ParaViewCatalyst.jl Julia package
++ The PARAVIEW_CATALYST_PATH Environment Variable set to the location of the Catalyst Library contained in Paraview
+
+To use the ParaViewCatalystCallback you have to
++ Include ParaViewCatalyst.jl in your julia Script via `using ParaViewCatalyst`
++ Create a ParaViewCatalystCallback and add it to your Callbackset
++ Before running the script:
+  + Open Paraview and press Catalyst->Connect... and use the standard Port of 22222 (if not specified otherwise in the pipeline)
+  + Press Catalyst->Pause Simulation
++ Now start running your Simulation
++ once the first set of values has been calculated and the Simulation pauses
+  + Adjust the view in Paraview to your liking
+  + Press Catalyst->Continue
 
 ## Trixi2Vtk
 Trixi2Vtk converts Trixi.jl's `.h5` output files to VTK files, which can be read

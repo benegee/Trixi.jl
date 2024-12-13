@@ -263,7 +263,7 @@ export SemidiscretizationCoupled
 
 export SummaryCallback, SteadyStateCallback, AnalysisCallback, AliveCallback,
        SaveRestartCallback, SaveSolutionCallback, TimeSeriesCallback, VisualizationCallback,
-       AveragingCallback,
+       AveragingCallback, ParaViewCatalystCallback,
        AMRCallback, StepsizeCallback,
        GlmSpeedCallback, LBMCollisionCallback, EulerAcousticsCouplingCallback,
        TrivialCallback, AnalysisCallbackCoupled,
@@ -290,7 +290,7 @@ export DGMulti, DGMultiBasis, estimate_dt, DGMultiMesh, GaussSBP
 export ViscousFormulationBassiRebay1, ViscousFormulationLocalDG
 
 # Visualization-related exports
-export PlotData1D, PlotData2D, ScalarPlotData2D, getmesh, adapt_to_mesh_level!,
+export PlotData1D, PlotData2D, ScalarPlotData2D, PlotData3D, getmesh, adapt_to_mesh_level!,
        adapt_to_mesh_level,
        iplot, iplot!
 
@@ -305,6 +305,16 @@ function __init__()
     # Enable features that depend on the availability of the Plots package
     @require Plots="91a5bcdd-55d7-5caf-9e0b-520d859cae80" begin
         using .Plots: Plots
+    end
+
+    # Enable features that depend on the availability of the ParaViewCatalyst package
+    # TODO: extension?
+    @require ParaViewCatalyst="0fa3a46a-29f8-4c04-a671-08df7e71e505" begin
+        using .ParaViewCatalyst: ParaViewCatalyst
+    end
+
+    @require GLMakie="e9467ef8-e4e7-5192-8a1a-b1aee30e663a" begin
+        using .GLMakie: GLMakie
     end
 
     # Until Julia v1.9 is the minimum required version for Trixi.jl, we still support Requires.jl
