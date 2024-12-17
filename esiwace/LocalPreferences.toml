@@ -1,0 +1,30 @@
+[CUDA_Runtime_jll]
+local = "true"
+version = "12.6"
+
+[HDF5]
+libhdf5 = "/dss/lrzsys/sys/spack/release/22.2.1/opt/icelake/hdf5/1.10.7-gcc-dgmcmi4/lib/libhdf5.so"
+libhdf5_hl = "/dss/lrzsys/sys/spack/release/22.2.1/opt/icelake/hdf5/1.10.7-gcc-dgmcmi4/lib/libhdf5_hl.so"
+
+[HDF5_jll]
+libhdf5_hl_path = "/dss/lrzsys/sys/spack/release/22.2.1/opt/icelake/hdf5/1.10.7-gcc-dgmcmi4/lib/libhdf5_hl.so"
+libhdf5_path = "/dss/lrzsys/sys/spack/release/22.2.1/opt/icelake/hdf5/1.10.7-gcc-dgmcmi4/lib/libhdf5.so"
+
+[MPIPreferences]
+__clear__ = ["preloads_env_switch"]
+_format = "1.0"
+abi = "OpenMPI"
+binary = "system"
+cclibs = []
+libmpi = "libmpi"
+mpiexec = "srun"
+preloads = []
+
+[P4est]
+libp4est = "/dss/dsstbyfs02/scratch/07/di38qiw/install/t8code/lib/libp4est.so"
+libsc = "/dss/dsstbyfs02/scratch/07/di38qiw/install/t8code/lib/libsc.so"
+
+[T8code]
+libp4est = "/dss/dsstbyfs02/scratch/07/di38qiw/install/t8code/lib/libp4est.so"
+libsc = "/dss/dsstbyfs02/scratch/07/di38qiw/install/t8code/lib/libsc.so"
+libt8 = "/dss/dsstbyfs02/scratch/07/di38qiw/install/t8code/lib/libt8.so"
