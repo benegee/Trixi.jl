@@ -2002,9 +2002,9 @@ version = "0.3.36"
 
 [[deps.T8code]]
 deps = ["CEnum", "Libdl", "MPI", "MPIPreferences", "Preferences", "Reexport", "UUIDs", "t8code_jll"]
-git-tree-sha1 = "d5e26ded4f83076c05739140080de1b165a5c79d"
+git-tree-sha1 = "1b5ef460f156ed68e3affb67f48e2b4bec9915e4"
 uuid = "d0cc0030-9a40-4274-8435-baadcfd54fa1"
-version = "0.7.3"
+version = "0.7.4"
 
 [[deps.TOML]]
 deps = ["Dates"]
@@ -2231,6 +2231,6 @@ version = "17.4.0+2"
 
 [[deps.t8code_jll]]
 deps = ["Artifacts", "JLLWrappers", "LazyArtifacts", "Libdl", "MPICH_jll", "MPIPreferences", "MPItrampoline_jll", "MicrosoftMPI_jll", "OpenMPI_jll", "TOML", "Zlib_jll"]
-git-tree-sha1 = "085c372c5f9459042258a7f51ee8734784700281"
+git-tree-sha1 = "cf073e7d4275b8a030140936639f3d6a5eeb3e74"
 uuid = "4ee9bed8-4011-53f7-90c2-22363c2f500d"
-version = "3.0.0+0"
+version = "3.0.1+0"
