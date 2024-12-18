@@ -5,13 +5,19 @@
 You need to get an account at https://docs.terrabyte.lrz.de/services/identity/get-account/
 and set up two-factor authentication.
 
+Documentation is available here: https://docs.terrabyte.lrz.de/
+
 ### Login
 ```shell
 ssh login.terrabyte.lrz.de
 ```
+You have storage space at `$HOME`, `$SCRATCH` (not backed up, temporary), and `$PROJECT`
+(soon to come).
 
 ### Set up t8code
-** TODO: change to project directory, then this step can be skipped **
+
+**TODO: once there is $PROJECT, this step can be skipped**
+
 1. Load modules
    ```shell
    module load gcc/11.2.0
@@ -51,7 +57,7 @@ ssh login.terrabyte.lrz.de
 
 ## Set up Julia
 Julia is not available on the cluster. We need to install it manually.
-1. If there no `.bashrc` or `.bash_profile` in your `$HOME` directory, create one
+1. If there is no `.bashrc` or `.bash_profile` in your `$HOME` directory, create one
    ```
    touch $HOME/.bashrc
    ```
@@ -81,35 +87,49 @@ Julia is not available on the cluster. We need to install it manually.
    . profile
    ```
 3. The Julia project is configured by several files: `Project.toml` lists dependencies,
-   `Manifest.toml` list exact version numbers for all required packages,
+   `Manifest.toml` lists exact version numbers for all installed packages,
    `LocalPreferences.toml` contains advanced configuration options.
    It should only be necessary to adapt `LocalPreference.toml` to reflect the t8code
    installation path.
 4. Open Julia via the `$JL` command and instantiate the project:
    ```shell
-   $JL --project -e 'using Pkg; Pkg.instantiate()'
+   $JL --project=. -e 'using Pkg; Pkg.instantiate()'
    ```
+   This will take some time!
 
 
 ## Precompile Trixi.jl
 1. Make sure that everything is precompiled by running the following:
    ```shell
-   $JL --project -e 'using OrdinaryDiffEq, Trixi'
+   $JL --project=. -e 'using OrdinaryDiffEq, Trixi'
    ```
 2. To test CUDA, first log in to a GPU node:
    ```shell
-   salloc --cluster=hpda2 --partition=hpda2_compute_gpu --nodes=1 --ntasks-per-node=1 --gres=gpu:4 --time=00:30:00
+   salloc --cluster=hpda2 --partition=hpda2_testgpu --nodes=1 --ntasks-per-node=1 --gres=gpu:1 --time=00:30:00
    ```
    Then start Julia:
    ```shell
-   $JL --project -e 'using CUDA; CUDA.versioninfo()'
+   $JL --project=. -e 'using CUDA; CUDA.versioninfo()'
    ```
+   This should print
+   ```
+   CUDA runtime 12.6, local installation
+   ...
+   ```
+   If it fails, it might help to re-set the CUDA runtime:
+   ```shell
+   $JL --project=. -e 'using CUDA; CUDA.set_runtime_version!(VersionNumber(12,6); local_toolkit=true)
+   ```
+   <!--
+   pkg = Base.PkgId(Base.UUID("76a88914-d11a-5bdc-97e0-2f5a05c973a2"), "CUDA_Runtime_jll")
+   Base.compilecache(pkg)
+   -->
 
 
 ## Launch
-1. SLURM jobscript are found in `jobscripts`. Edit as necessary. At least, you have to
+1. SLURM jobscripts can be found in `jobscripts`. Edit as necessary. At least, you have to
    specify your mail address.
-2. The actual simulation is configured in `run.jl` and based on Trixi.jl file in `elixirs`.
+2. The actual simulation is configured in `run.jl` and based on Trixi.jl files in `elixirs`.
 3. Send job to queue:
    ```shell
    sbatch jobscript/single_node.sh
