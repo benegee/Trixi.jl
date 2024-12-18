@@ -161,7 +161,7 @@ end
                                       mesh::ParallelP4estMesh{3},
                                       equations,
                                       mortar_l2::LobattoLegendreMortarL2,
-                                      surface_integral, dg::DGSEM)
+                                      dg::DGSEM)
     if nmpimortars(dg, cache) > 0
         error("mortars currently not supported by KA.jl P4estMesh solver")
     end

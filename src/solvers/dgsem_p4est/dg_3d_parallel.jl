@@ -327,17 +327,17 @@ function prolong2mpimortars!(cache, u,
                              mesh::Union{ParallelP4estMesh{3}, ParallelT8codeMesh{3}},
                              equations,
                              mortar_l2::LobattoLegendreMortarL2,
-                             surface_integral, dg::DGSEM)
+                             dg::DGSEM)
     backend = backend_or_nothing(cache.mpi_mortars)
     _prolong2mpimortars!(backend, cache, u, mesh, equations,
-                         mortar_l2, surface_integral, dg)
+                         mortar_l2, dg)
 end
 
 @inline function _prolong2mpimortars!(backend::Nothing, cache, u,
                                       mesh::Union{ParallelP4estMesh{3}, ParallelT8codeMesh{3}},
                                       equations,
                                       mortar_l2::LobattoLegendreMortarL2,
-                                      surface_integral, dg::DGSEM)
+                                      dg::DGSEM)
     @unpack node_indices = cache.mpi_mortars
     index_range = eachnode(dg)
 
