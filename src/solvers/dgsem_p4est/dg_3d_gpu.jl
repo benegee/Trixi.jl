@@ -464,7 +464,7 @@ end
 @inline function _prolong2mortars!(backend::Backend, cache, u,
                                    mesh::P4estMesh{3}, equations,
                                    mortar_l2::LobattoLegendreMortarL2,
-                                   surface_integral, dg::DGSEM)
+                                   dg::DGSEM)
     if nmortars(dg, cache) > 0
         error("mortars currently not supported by KA.jl P4estMesh solver")
     end

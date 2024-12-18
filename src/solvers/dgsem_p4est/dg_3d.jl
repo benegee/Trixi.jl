@@ -13,11 +13,11 @@ function create_cache(mesh::Union{P4estMesh{3}, T8codeMesh{3}}, equations,
     fstar_primary_threaded = [Array{uEltype, 4}(undef, nvariables(equations),
                                                 nnodes(mortar_l2),
                                                 nnodes(mortar_l2), 4)
-                              for _ in 1:Threads.nthreads()]
+                              for _ in 1:Threads.nthreads()] |> VecOfArrays
     fstar_secondary_threaded = [Array{uEltype, 4}(undef, nvariables(equations),
                                                   nnodes(mortar_l2),
                                                   nnodes(mortar_l2), 4)
-                                for _ in 1:Threads.nthreads()]
+                                for _ in 1:Threads.nthreads()] |> VecOfArrays
 
     fstar_tmp_threaded = [Array{uEltype, 3}(undef, nvariables(equations),
                                             nnodes(mortar_l2), nnodes(mortar_l2))
@@ -451,16 +451,14 @@ end
 
 function prolong2mortars!(cache, u,
                           mesh::Union{P4estMesh{3}, T8codeMesh{3}}, equations,
-                          mortar_l2::LobattoLegendreMortarL2,
-                          surface_integral, dg::DGSEM)
+                          mortar_l2::LobattoLegendreMortarL2, dg::DGSEM)
     backend = backend_or_nothing(cache.mortars)
-    _prolong2mortars!(backend, cache, u, mesh, equations, mortar_l2, surface_integral, dg)
+    _prolong2mortars!(backend, cache, u, mesh, equations, mortar_l2, dg)
 end
 
 @inline function _prolong2mortars!(backend::Nothing, cache, u,
                                    mesh::Union{P4estMesh{3}, T8codeMesh{3}}, equations,
-                                   mortar_l2::LobattoLegendreMortarL2,
-                                   surface_integral, dg::DGSEM)
+                                   mortar_l2::LobattoLegendreMortarL2, dg::DGSEM)
     @unpack fstar_tmp_threaded = cache
     @unpack neighbor_ids, node_indices = cache.mortars
     index_range = eachnode(dg)
