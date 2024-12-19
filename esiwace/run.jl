@@ -10,10 +10,9 @@ function main(elixir_path)
     isroot = rank == 0
 
     # pin rank to device?
-    #if machine == "jedi"
-    #    CUDA.device!(rank % 4)
-    #end
-    print("Rank $rank has device: $(CUDA.device())\n")
+    CUDA.device!(rank % 4)
+    gpu = CUDA.device()
+    print("Rank $rank has device $(gpu) with ID $(CUDA.uuid(gpu)), has CUDA: $(MPI.has_cuda())\n")
 
     # setup
     maxiters = 400
