@@ -4,13 +4,16 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=4
 #SBATCH --gres=gpu:4
-#SBATCH --mail-user=<mail_addr>
-#SBATCH --mail-type=all
+#SBATCH --get-user-env
 #SBATCH --export=NONE
+#SBATCH --mail-user=bgeihe@uni-koeln.de
+#SBATCH --mail-type=all
+#SBATCH --job-name=single_node
 #SBATCH --output=stdout.%j
 #SBATCH --error=stderr.%j
 #SBATCH --time=00:30:00
 
 source profile
 
-srun $JL --threads=1 --project=. run.jl
+mpiexec -n $SLURM_NTASKS $JL --threads=1 --project=. run.jl
+

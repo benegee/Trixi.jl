@@ -1,10 +1,9 @@
 module purge
-module load spack/22.2.1
-module load gcc/11.2.0
-module load openmpi/4.1.2-gcc11
-module load hdf5/1.10.7-gcc11
-
-export CUDA_HOME=/usr/local/cuda-12.6/
+module load slurm_setup
+module load spack/23.1.0
+module load gcc/12.2.0
+module load openmpi/4.1.5-gcc11
+module load cuda/11.8.0
 
 export JULIA_DEPOT_PATH="$SCRATCH/julia-depot/"
 export JL="julia +1.11"

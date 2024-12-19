@@ -1,14 +1,14 @@
 [CUDA_Runtime_jll]
 local = "true"
-version = "12.6"
+version = "11.8"
 
 [HDF5]
-libhdf5 = "/dss/lrzsys/sys/spack/release/22.2.1/opt/icelake/hdf5/1.10.7-gcc-dgmcmi4/lib/libhdf5.so"
-libhdf5_hl = "/dss/lrzsys/sys/spack/release/22.2.1/opt/icelake/hdf5/1.10.7-gcc-dgmcmi4/lib/libhdf5_hl.so"
+libhdf5 = "/lrz/sys/spack/release/23.1.0/opt/icelake/hdf5/1.14.2-gcc-wvedyel/lib/libhdf5.so"
+libhdf5_hl = "/lrz/sys/spack/release/23.1.0/opt/icelake/hdf5/1.14.2-gcc-wvedyel/lib/libhdf5_hl.so"
 
 [HDF5_jll]
-libhdf5_hl_path = "/dss/lrzsys/sys/spack/release/22.2.1/opt/icelake/hdf5/1.10.7-gcc-dgmcmi4/lib/libhdf5_hl.so"
-libhdf5_path = "/dss/lrzsys/sys/spack/release/22.2.1/opt/icelake/hdf5/1.10.7-gcc-dgmcmi4/lib/libhdf5.so"
+libhdf5_hl_path = "/lrz/sys/spack/release/23.1.0/opt/icelake/hdf5/1.14.2-gcc-wvedyel/lib/libhdf5_hl.so"
+libhdf5_path = "/lrz/sys/spack/release/23.1.0/opt/icelake/hdf5/1.14.2-gcc-wvedyel/lib/libhdf5.so"
 
 [MPIPreferences]
 __clear__ = ["preloads_env_switch"]
@@ -17,7 +17,7 @@ abi = "OpenMPI"
 binary = "system"
 cclibs = []
 libmpi = "libmpi"
-mpiexec = "srun"
+mpiexec = "mpiexec"
 preloads = []
 
 [P4est]
