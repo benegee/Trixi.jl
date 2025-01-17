@@ -21,10 +21,10 @@ mpiexec = "mpiexec"
 preloads = []
 
 [P4est]
-libp4est = "/dss/dsstbyfs02/scratch/07/di38qiw/install/t8code/lib/libp4est.so"
-libsc = "/dss/dsstbyfs02/scratch/07/di38qiw/install/t8code/lib/libsc.so"
+libp4est = "/dss/dsstbyfs02/pn76vi/pn76vi-dss-0000/install/t8code/lib/libp4est.so"
+libsc = "/dss/dsstbyfs02/pn76vi/pn76vi-dss-0000/install/t8code/lib/libsc.so"
 
 [T8code]
-libp4est = "/dss/dsstbyfs02/scratch/07/di38qiw/install/t8code/lib/libp4est.so"
-libsc = "/dss/dsstbyfs02/scratch/07/di38qiw/install/t8code/lib/libsc.so"
-libt8 = "/dss/dsstbyfs02/scratch/07/di38qiw/install/t8code/lib/libt8.so"
+libp4est = "/dss/dsstbyfs02/pn76vi/pn76vi-dss-0000/install/t8code/lib/libp4est.so"
+libsc = "/dss/dsstbyfs02/pn76vi/pn76vi-dss-0000/install/t8code/lib/libsc.so"
+libt8 = "/dss/dsstbyfs02/pn76vi/pn76vi-dss-0000/install/t8code/lib/libt8.so"

@@ -12,13 +12,17 @@ Documentation is available here: https://docs.terrabyte.lrz.de/
 ```shell
 ssh login.terrabyte.lrz.de
 ```
-You have storage space at `$HOME`, `$SCRATCH` (not backed up, temporary), and `$PROJECT`
-(soon to come).
+You have storage space at `$HOME` and `$SCRATCH` (not backed up, temporary).
+There is also a common project storage space. Use
+```
+export PROJECT=/dss/dsstbyfs02/pn76vi/pn76vi-dss-0000
+```
+to be able to access it as `$PROJECT`.
 
 
 ### Set up t8code
-
-**TODO: once there is $PROJECT, this step can be skipped**
+t8code has already been installed in `$PROJECT/install/t8code`.
+Do the following only if you require an individual installation.
 
 1. Load modules
    ```shell
