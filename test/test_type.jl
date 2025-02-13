@@ -1524,6 +1524,7 @@ isdir(outdir) && rm(outdir, recursive = true)
                                              one(RealT),
                                              one(RealT),
                                              one(RealT))
+            dissipation_es = DissipationLaxFriedrichsEntropyVariables()
             orientations = [1, 2]
 
             @test eltype(@inferred initial_condition_weak_blast_wave(x, t, equations)) ==
@@ -1546,6 +1547,8 @@ isdir(outdir) && rm(outdir, recursive = true)
 
                 @test typeof(@inferred max_abs_speed_naive(u_ll, u_rr, orientation,
                                                            equations)) ==
+                      RealT
+                @test eltype(@inferred dissipation_es(u_ll, u_rr, orientation, equations)) ==
                       RealT
             end
 
@@ -2255,7 +2258,8 @@ isdir(outdir) && rm(outdir, recursive = true)
             directions = [1, 2]
             normal_direction = SVector(one(RealT))
 
-            surface_flux_function = flux_lax_friedrichs
+            surface_flux_function = (flux_lax_friedrichs,
+                                     flux_nonconservative_wintermeyer_etal)
             dissipation = DissipationLocalLaxFriedrichs()
             numflux = FluxHLL()
 
@@ -2272,7 +2276,8 @@ isdir(outdir) && rm(outdir, recursive = true)
                                                                     direction,
                                                                     x, t,
                                                                     surface_flux_function,
-                                                                    equations)) == RealT
+                                                                    equations)) ==
+                      SVector{3, RealT}
                 @test eltype(@inferred Trixi.calc_wavespeed_roe(u_ll, u_rr, direction,
                                                                 equations)) ==
                       RealT
@@ -2344,7 +2349,8 @@ isdir(outdir) && rm(outdir, recursive = true)
             directions = [1, 2, 3, 4]
             normal_direction = SVector(one(RealT), zero(RealT))
 
-            surface_flux_function = flux_lax_friedrichs
+            surface_flux_function = (flux_lax_friedrichs,
+                                     flux_nonconservative_wintermeyer_etal)
             dissipation = DissipationLocalLaxFriedrichs()
             numflux = FluxHLL()
 
@@ -2358,7 +2364,8 @@ isdir(outdir) && rm(outdir, recursive = true)
                                                                 normal_direction,
                                                                 x, t,
                                                                 surface_flux_function,
-                                                                equations)) == RealT
+                                                                equations)) ==
+                  SVector{4, RealT}
 
             @test eltype(@inferred velocity(u, normal_direction, equations)) == RealT
             @test eltype(@inferred flux(u, normal_direction, equations)) == RealT
@@ -2400,7 +2407,7 @@ isdir(outdir) && rm(outdir, recursive = true)
                                                                         direction, x, t,
                                                                         surface_flux_function,
                                                                         equations)) ==
-                          RealT
+                          SVector{4, RealT}
                 end
 
                 @test eltype(@inferred velocity(u, orientation, equations)) == RealT

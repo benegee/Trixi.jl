@@ -68,6 +68,16 @@ function Adapt.adapt_structure(to, mpi_cache::P4estMPICache)
                                              n_elements_global, first_element_global_id)
 end
 
+##
+# Note that the code in `start_mpi_send`/`finish_mpi_receive!` is sensitive to inference on (at least) Julia 1.10.
+# Julia's inference is bi-stable, it can sometimes depend on what code has been looked at already, and
+# the presence of an inference result in the cache can have an impact on the inference of code.
+# In this case the `send_buffer[first:last] .= vec(cache.mpi_mortars.u[2, :, :, ..,mortar])`,
+# can fail to be inferred due to heuristics if this function is not in the cache...
+precompile(Base.reindex,
+           (Tuple{Base.Slice{Base.OneTo{Int64}}, Int64, Base.Slice{Base.OneTo{Int64}},
+                  Base.Slice{Base.OneTo{Int64}}, Int64}, Tuple{Int64, Int64, Int64}))
+
 function start_mpi_send!(mpi_cache::P4estMPICache, mesh, equations, dg, cache)
     backend = backend_or_nothing(cache.elements)
     _start_mpi_send!(backend, mpi_cache, mesh, equations, dg, cache)
