@@ -57,6 +57,7 @@ using LinearMaps: LinearMap
 using LoopVectorization: LoopVectorization, @turbo, indices
 using StaticArrayInterface: static_length # used by LoopVectorization
 using MuladdMacro: @muladd
+using NVTX: @range
 using Octavian: Octavian, matmul!
 using Polyester: Polyester, @batch # You know, the cheapest threads you can find...
 using OffsetArrays: OffsetArray, OffsetVector
@@ -76,7 +77,7 @@ export TriangulateIO # for type parameter in DGMultiMesh
 using TriplotBase: TriplotBase
 using TriplotRecipes: DGTriPseudocolor
 @reexport using TrixiBase: trixi_include
-using TrixiBase: TrixiBase, @trixi_timeit, timer
+using TrixiBase: TrixiBase, timer
 @reexport using SimpleUnPack: @unpack
 using SimpleUnPack: @pack!
 using DataStructures: BinaryHeap, FasterForward, extract_all!
