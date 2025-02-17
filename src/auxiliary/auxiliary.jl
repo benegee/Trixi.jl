@@ -375,19 +375,19 @@ end
 
 macro trixi_timeit(timer_output, label, expr)
     timeit_block = quote
-        if timeit_debug_enabled()
-            local to = $(esc(timer_output))
-            local enabled = to.enabled
-            if enabled
-                local accumulated_data = $(TimerOutputs.push!)(to, $(esc(label)))
-            end
-            local b0 = $(TimerOutputs.gc_bytes)()
-            local t0 = $(TimerOutputs.time_ns)()
+        local to = $(esc(timer_output))
+        local enabled = to.enabled
+        if enabled
+            local accumulated_data = $(TimerOutputs.push!)(to, $(esc(label)))
         end
+        local b0 = $(TimerOutputs.gc_bytes)()
+        local t0 = $(TimerOutputs.time_ns)()
+
         NVTX.@range $(esc(label)) begin
             local val = $(esc(expr))
         end
-        if timeit_debug_enabled() && enabled
+
+        if enabled
             $(TimerOutputs.do_accumulate!)(accumulated_data, t0, b0)
             $(TimerOutputs.pop!)(to)
         end
