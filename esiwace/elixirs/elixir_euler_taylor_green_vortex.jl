@@ -60,14 +60,20 @@ callbacks = CallbackSet(summary_callback, stepsize_callback)
 ###############################################################################
 # run the simulation
 
-maxiters=200
+maxiters = 200
+run_profiler = false
 
 # disable warnings when maxiters is reached
+if run_profiler
+    CUDA.Profile.start()
+end
 sol = solve(ode, CarpenterKennedy2N54(williamson_condition=false),
             dt=1.0,
             save_everystep=false, callback=callbacks,
             maxiters=maxiters, verbose=false);
-
+if run_profiler
+    CUDA.Profile.stop()
+end
 # print the timer summary
 summary_callback()
 

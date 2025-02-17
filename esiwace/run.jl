@@ -15,7 +15,9 @@ function main(elixir_path)
     print("Rank $rank has device $(gpu) with ID $(CUDA.uuid(gpu)), has CUDA: $(MPI.has_cuda())\n")
 
     # setup
-    maxiters = 400
+    maxiters = 10
+    initial_refinement_level = 3
+    run_profiler = true
 
     if isroot
         println("Warming up...")
@@ -23,7 +25,7 @@ function main(elixir_path)
 
     # start simulation with tiny final time to trigger precompilation
     duration_precompile = @elapsed trixi_include(elixir_path,
-        tspan=(0.0, 1e-14))
+                                                 tspan=(0.0, 1e-14))
 
     if isroot
         println("Finished warm-up in $duration_precompile seconds\n")
@@ -31,7 +33,10 @@ function main(elixir_path)
     end
 
     # start the real simulation
-    duration_elixir = @elapsed trixi_include(elixir_path, maxiters=maxiters)
+    duration_elixir = @elapsed trixi_include(elixir_path,
+                                             maxiters=maxiters,
+                                             initial_refinement_level=initial_refinement_level,
+                                             run_profiler=run_profiler)
 
     # store metrics (on every rank!)
     metrics = Dict{String, Float64}("elapsed time" => duration_elixir)
