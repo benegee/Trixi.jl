@@ -54,7 +54,11 @@ summary_callback = SummaryCallback()
 
 stepsize_callback = StepsizeCallback(cfl=0.1)
 
-callbacks = CallbackSet(summary_callback, stepsize_callback)
+performance_callback = PerformanceDataCallback(interval=5)
+
+callbacks = CallbackSet(summary_callback,
+                        performance_callback,
+                        stepsize_callback)
 
 
 ###############################################################################
@@ -64,16 +68,20 @@ maxiters = 200
 run_profiler = false
 
 # disable warnings when maxiters is reached
+integrator = init(ode, CarpenterKennedy2N54(williamson_condition=false),
+                  dt=1.0,
+                  save_everystep=false, callback=callbacks,
+                  maxiters=maxiters, verbose=false)
 if run_profiler
-    CUDA.Profile.start()
+    prof_result = CUDA.@profile solve!(integrator)
+    # the internal profiler will return the results to be printed
+    if isa(prof_result, CUDA.Profile.ProfileResults)
+        print(prof_result)
+    end
+else
+    solve!(integrator)
 end
-sol = solve(ode, CarpenterKennedy2N54(williamson_condition=false),
-            dt=1.0,
-            save_everystep=false, callback=callbacks,
-            maxiters=maxiters, verbose=false);
-if run_profiler
-    CUDA.Profile.stop()
-end
+
 # print the timer summary
 summary_callback()
 
