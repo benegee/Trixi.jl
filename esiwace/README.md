@@ -145,3 +145,33 @@ Julia is not available on the cluster. We need to install it manually.
    ```shell
    sbatch jobscript/single_node.sh
    ```
+
+
+## Profiling
+
+### NVIDIA Nsight Systems
+
+Some instructions are available at
+[CUDA.jl](https://cuda.juliagpu.org/stable/development/profiling/#Application-profiling) and
+[NVTX.jl](https://juliagpu.github.io/NVTX.jl/dev/tips/#Launcher-outside-profiler).
+
+The following command line has worked. It launches instances of `nsys` on every rank, tells
+them to run in non-interactive mode, start profiling only when told to do so from within
+the application, and trace CUDA, NVTX, and MPI events.
+```shell
+mpiexec -n 2
+  nsys profile --start-later=true
+               --capture-range=cudaProfilerApi
+               --capture-range-end=stop
+               --trace=cuda,nvtx,mpi
+               --mpi-impl=openmpi
+               --output=report.%q{OMPI_COMM_WORLD_RANK}
+               --force-overwrite=true
+    $JL --project=. run.jl
+```
+Due to a regression (https://github.com/JuliaGPU/CUDA.jl/pull/2638) CUDA.jl has to be used
+from the master branch:
+```julia
+$JL --project=.
+julia> pkg"add CUDA#master"
+```
