@@ -658,7 +658,12 @@ end
         #  (nvariables(equations), ntuple(_ -> nnodes(dg), ndims(mesh))..., nelements(dg, cache)))
     else
         # The following version is reasonably fast and allows us to `resize!(u_ode, ...)`.
-        unsafe_wrap(Array{eltype(u_ode), ndims(mesh) + 2}, pointer(u_ode),
+        if mesh isa P4estMesh
+            ArrayType = array_type(cache.elements)
+        else
+            ArrayType = Array
+        end
+        unsafe_wrap(ArrayType{eltype(u_ode), ndims(mesh) + 2}, pointer(u_ode),
                     (nvariables(equations), ntuple(_ -> nnodes(dg), ndims(mesh))...,
                      nelements(dg, cache)))
     end
@@ -702,7 +707,12 @@ end
         @assert length(u_ode) ==
                 nvariables(equations) * nnodes(dg)^ndims(mesh) * nelements(dg, cache)
     end
-    unsafe_wrap(Array{eltype(u_ode), ndims(mesh) + 2}, pointer(u_ode),
+    if mesh isa P4estMesh
+        ArrayType = array_type(cache.elements)
+    else
+        ArrayType = Array
+    end
+    unsafe_wrap(ArrayType{eltype(u_ode), ndims(mesh) + 2}, pointer(u_ode),
                 (nvariables(equations), ntuple(_ -> nnodes(dg), ndims(mesh))...,
                  nelements(dg, cache)))
 end
@@ -752,6 +762,37 @@ function compute_coefficients!(u, func, t, mesh::AbstractMesh{3}, equations, dg:
     end
 end
 
+end # @muladd; put it up here because module definition below needs to be at top level
+
+# For some mesh types, elements next to a surface may have local coordinate systems
+# that are not aligned so the nodes may have to be indexed differently.
+# `IndexInfo` is used to describe how the nodes should be indexed.
+# For example, in 2d a `Tuple` with two `IndexInfo` objects, one for each dimension,
+# would be used.
+# `first` or `last` indicates that the corresponding index is constant and is either
+# the first or the last one. This effectively encodes the position of the surface
+# with respect to the local coordinate system. The other `IndexInfo` object(s)
+# encode if the index in the corresponding dimension is running forward or backward.
+#
+# The Enum is wrapped in a module and exported so that the enum values do not pollute
+# the global namespace and can only be accessed via `Indexing.value`.
+module Indexing
+@enum IndexInfo begin
+    first
+    last
+    i_forward
+    i_backward
+    j_forward
+    j_backward
+end
+export IndexInfo
+end
+using .Indexing
+
+# Adapt.@adapt_structure macro must be outside of the same `begin ... end` block where
+# the type it is used on is defined, otherwise this throws an UndefVar
+Adapt.@adapt_structure DG
+
 # Discretizations specific to each mesh type of Trixi.jl
 # If some functionality is shared by multiple combinations of meshes/solvers,
 # it is defined in the directory of the most basic mesh and solver type.
@@ -765,4 +806,3 @@ include("dgsem_structured/dg.jl")
 include("dgsem_unstructured/dg.jl")
 include("dgsem_p4est/dg.jl")
 include("dgsem_t8code/dg.jl")
-end # @muladd

@@ -43,6 +43,7 @@ import SciMLBase: get_du, get_tmp_cache, u_modified!,
 
 using DelimitedFiles: readdlm
 using Downloads: Downloads
+import Adapt
 using CodeTracking: CodeTracking
 using ConstructionBase: ConstructionBase
 using DiffEqBase: DiffEqBase, get_tstops, get_tstops_array
@@ -51,10 +52,13 @@ using DiffEqCallbacks: PeriodicCallback, PeriodicCallbackAffect
 using FillArrays: Ones, Zeros
 using ForwardDiff: ForwardDiff
 using HDF5: HDF5, h5open, attributes, create_dataset, datatype, dataspace
+using KernelAbstractions
 using LinearMaps: LinearMap
 using LoopVectorization: LoopVectorization, @turbo, indices
 using StaticArrayInterface: static_length # used by LoopVectorization
 using MuladdMacro: @muladd
+using CUDA: CUDA, device, uuid, pool_status, @profile
+using NVTX: NVTX, @range
 using Octavian: Octavian, matmul!
 using Polyester: Polyester, @batch # You know, the cheapest threads you can find...
 using OffsetArrays: OffsetArray, OffsetVector
@@ -63,7 +67,7 @@ using T8code
 using RecipesBase: RecipesBase
 using RecursiveArrayTools: VectorOfArray
 using Requires: @require
-using Static: Static, One, True, False
+using Static: Static, One, StaticBool, True, False
 @reexport using StaticArrays: SVector
 using StaticArrays: StaticArrays, MVector, MArray, SMatrix, @SMatrix
 using StrideArrays: PtrArray, StrideArray, StaticInt
@@ -74,7 +78,7 @@ export TriangulateIO # for type parameter in DGMultiMesh
 using TriplotBase: TriplotBase
 using TriplotRecipes: DGTriPseudocolor
 @reexport using TrixiBase: trixi_include
-using TrixiBase: TrixiBase, @trixi_timeit, timer
+using TrixiBase: TrixiBase, timer
 @reexport using SimpleUnPack: @unpack
 using SimpleUnPack: @pack!
 using DataStructures: BinaryHeap, FasterForward, extract_all!
@@ -127,6 +131,7 @@ include("auxiliary/auxiliary.jl")
 include("auxiliary/mpi.jl")
 include("auxiliary/p4est.jl")
 include("auxiliary/t8code.jl")
+include("auxiliary/vector_of_arrays.jl")
 include("equations/equations.jl")
 include("meshes/meshes.jl")
 include("solvers/solvers.jl")
@@ -272,7 +277,7 @@ export SemidiscretizationCoupled
 
 export SummaryCallback, SteadyStateCallback, AnalysisCallback, AliveCallback,
        SaveRestartCallback, SaveSolutionCallback, TimeSeriesCallback, VisualizationCallback,
-       AveragingCallback,
+       AveragingCallback, PerformanceDataCallback,
        AMRCallback, StepsizeCallback,
        GlmSpeedCallback, LBMCollisionCallback, EulerAcousticsCouplingCallback,
        TrivialCallback, AnalysisCallbackCoupled,

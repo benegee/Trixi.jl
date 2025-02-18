@@ -109,6 +109,10 @@ function rhs!(du, u, t,
     # Finish to send MPI data
     @trixi_timeit timer() "finish MPI send" finish_mpi_send!(cache.mpi_cache)
 
+    if mesh isa P4estMesh && uses_ka(cache.elements)
+        synchronize(get_backend(cache.elements))
+    end
+
     return nothing
 end
 
@@ -116,6 +120,14 @@ function prolong2mpiinterfaces!(cache, u,
                                 mesh::Union{ParallelP4estMesh{3},
                                             ParallelT8codeMesh{3}},
                                 equations, surface_integral, dg::DG)
+    backend = backend_or_nothing(cache.mpi_interfaces)
+    _prolong2mpiinterfaces!(backend, cache, u, mesh, equations, surface_integral, dg)
+end
+
+@inline function _prolong2mpiinterfaces!(backend::Nothing, cache, u,
+                                         mesh::Union{ParallelP4estMesh{3},
+                                                     ParallelT8codeMesh{3}},
+                                         equations, surface_integral, dg::DG)
     @unpack mpi_interfaces = cache
     index_range = eachnode(dg)
 
@@ -165,6 +177,16 @@ function calc_mpi_interface_flux!(surface_flux_values,
                                               ParallelT8codeMesh{3}},
                                   nonconservative_terms,
                                   equations, surface_integral, dg::DG, cache)
+    backend = backend_or_nothing(cache.mpi_interfaces)
+    _calc_mpi_interface_flux!(backend, surface_flux_values, mesh, nonconservative_terms,
+                              equations, surface_integral, dg, cache)
+end
+
+@inline function _calc_mpi_interface_flux!(backend::Nothing, surface_flux_values,
+                                           mesh::Union{ParallelP4estMesh{3},
+                                                       ParallelT8codeMesh{3}},
+                                           nonconservative_terms,
+                                           equations, surface_integral, dg::DG, cache)
     @unpack local_neighbor_ids, node_indices, local_sides = cache.mpi_interfaces
     @unpack contravariant_vectors = cache.elements
     index_range = eachnode(dg)
@@ -306,6 +328,16 @@ function prolong2mpimortars!(cache, u,
                              equations,
                              mortar_l2::LobattoLegendreMortarL2,
                              dg::DGSEM)
+    backend = backend_or_nothing(cache.mpi_mortars)
+    _prolong2mpimortars!(backend, cache, u, mesh, equations,
+                         mortar_l2, dg)
+end
+
+@inline function _prolong2mpimortars!(backend::Nothing, cache, u,
+                                      mesh::Union{ParallelP4estMesh{3}, ParallelT8codeMesh{3}},
+                                      equations,
+                                      mortar_l2::LobattoLegendreMortarL2,
+                                      dg::DGSEM)
     @unpack node_indices = cache.mpi_mortars
     index_range = eachnode(dg)
 
@@ -416,6 +448,16 @@ function calc_mpi_mortar_flux!(surface_flux_values,
                                nonconservative_terms, equations,
                                mortar_l2::LobattoLegendreMortarL2,
                                surface_integral, dg::DG, cache)
+    backend = backend_or_nothing(cache.mpi_mortars)
+    _calc_mpi_mortar_flux!(backend, surface_flux_values, mesh, nonconservative_terms, equations,
+                           mortar_l2, surface_integral, dg, cache)
+end
+
+@inline function _calc_mpi_mortar_flux!(backend::Nothing, surface_flux_values,
+                                        mesh::Union{ParallelP4estMesh{3}, ParallelT8codeMesh{3}},
+                                        nonconservative_terms, equations,
+                                        mortar_l2::LobattoLegendreMortarL2,
+                                        surface_integral, dg::DG, cache)
     @unpack local_neighbor_ids, local_neighbor_positions, node_indices = cache.mpi_mortars
     @unpack contravariant_vectors = cache.elements
     @unpack fstar_primary_threaded, fstar_secondary_threaded, fstar_tmp_threaded = cache
