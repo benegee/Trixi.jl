@@ -57,6 +57,7 @@ using LinearMaps: LinearMap
 using LoopVectorization: LoopVectorization, @turbo, indices
 using StaticArrayInterface: static_length # used by LoopVectorization
 using MuladdMacro: @muladd
+using CUDA: CUDA, device, uuid, pool_status, @profile
 using NVTX: NVTX, @range
 using Octavian: Octavian, matmul!
 using Polyester: Polyester, @batch # You know, the cheapest threads you can find...
@@ -276,7 +277,7 @@ export SemidiscretizationCoupled
 
 export SummaryCallback, SteadyStateCallback, AnalysisCallback, AliveCallback,
        SaveRestartCallback, SaveSolutionCallback, TimeSeriesCallback, VisualizationCallback,
-       AveragingCallback,
+       AveragingCallback, PerformanceDataCallback,
        AMRCallback, StepsizeCallback,
        GlmSpeedCallback, LBMCollisionCallback, EulerAcousticsCouplingCallback,
        TrivialCallback, AnalysisCallbackCoupled,
