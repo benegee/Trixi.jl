@@ -13,23 +13,23 @@ function create_cache(mesh::Union{P4estMesh{3}, T8codeMesh{3}}, equations,
     fstar_primary_threaded = [Array{uEltype, 4}(undef, nvariables(equations),
                                                 nnodes(mortar_l2),
                                                 nnodes(mortar_l2), 4)
-                              for _ in 1:Threads.nthreads()]
+                              for _ in 1:Threads.nthreads()] |> VecOfArrays
     fstar_secondary_threaded = [Array{uEltype, 4}(undef, nvariables(equations),
                                                   nnodes(mortar_l2),
                                                   nnodes(mortar_l2), 4)
-                                for _ in 1:Threads.nthreads()]
+                                for _ in 1:Threads.nthreads()] |> VecOfArrays
 
     fstar_tmp_threaded = [Array{uEltype, 3}(undef, nvariables(equations),
                                             nnodes(mortar_l2), nnodes(mortar_l2))
-                          for _ in 1:Threads.nthreads()]
+                          for _ in 1:Threads.nthreads()] |> VecOfArrays
     u_threaded = [Array{uEltype, 3}(undef, nvariables(equations), nnodes(mortar_l2),
                                     nnodes(mortar_l2))
-                  for _ in 1:Threads.nthreads()]
+                  for _ in 1:Threads.nthreads()] |> VecOfArrays
 
     (; fstar_primary_threaded, fstar_secondary_threaded, fstar_tmp_threaded, u_threaded)
 end
 
-#     index_to_start_step_3d(index::Symbol, index_range)
+#     index_to_start_step_3d(index::IndexInfo, index_range)
 #
 # Given a symbolic `index` and an `indexrange` (usually `eachnode(dg)`),
 # return `index_start, index_step_i, index_step_j`, i.e., a tuple containing
@@ -58,36 +58,38 @@ end
 #       j_volume += j_volume_step_j
 #       k_volume += k_volume_step_j
 #     end
-@inline function index_to_start_step_3d(index::Symbol, index_range)
+@inline function index_to_start_step_3d(index::IndexInfo, index_range)
     index_begin = first(index_range)
     index_end = last(index_range)
 
-    if index === :begin
+    if index === Indexing.first
         return index_begin, 0, 0
-    elseif index === :end
+    elseif index === Indexing.last
         return index_end, 0, 0
-    elseif index === :i_forward
+    elseif index === Indexing.i_forward
         return index_begin, 1, index_begin - index_end - 1
-    elseif index === :i_backward
+    elseif index === Indexing.i_backward
         return index_end, -1, index_end + 1 - index_begin
-    elseif index === :j_forward
+    elseif index === Indexing.j_forward
         return index_begin, 0, 1
-    else # if index === :j_backward
+    else # if index === Indexing.j_backward
         return index_end, 0, -1
     end
 end
 
-# Extract the two varying indices from a symbolic index tuple.
-# For example, `surface_indices((:i_forward, :end, :j_forward)) == (:i_forward, :j_forward)`.
-@inline function surface_indices(indices::NTuple{3, Symbol})
+# Extract the two varying indices from an IndexInfo tuple.
+# For example, 
+# `surface_indices((Indexing.i_forward, Indexing.last, Indexing.j_forward)) == 
+#    (Indexing.i_forward, Indexing.j_forward)`.
+@inline function surface_indices(indices::NTuple{3, IndexInfo})
     i1, i2, i3 = indices
     index = i1
-    (index === :begin || index === :end) && return (i2, i3)
+    (index === Indexing.first || index === Indexing.last) && return (i2, i3)
 
     index = i2
-    (index === :begin || index === :end) && return (i1, i3)
+    (index === Indexing.first || index === Indexing.last) && return (i1, i3)
 
-    # i3 in (:begin, :end)
+    # i3 in (Indexing.first, Indexing.last)
     return (i1, i2)
 end
 
@@ -95,6 +97,13 @@ end
 function prolong2interfaces!(cache, u,
                              mesh::Union{P4estMesh{3}, T8codeMesh{3}},
                              equations, surface_integral, dg::DG)
+    backend = backend_or_nothing(cache.interfaces)
+    _prolong2interfaces!(backend, cache, u, mesh, equations, surface_integral, dg)
+end
+
+@inline function _prolong2interfaces!(backend::Nothing, cache, u,
+                                      mesh::Union{P4estMesh{3}, T8codeMesh{3}},
+                                      equations, surface_integral, dg::DG)
     @unpack interfaces = cache
     index_range = eachnode(dg)
 
@@ -171,6 +180,15 @@ function calc_interface_flux!(surface_flux_values,
                               mesh::Union{P4estMesh{3}, T8codeMesh{3}},
                               nonconservative_terms,
                               equations, surface_integral, dg::DG, cache)
+    backend = backend_or_nothing(cache.interfaces)
+    _calc_interface_flux!(backend, surface_flux_values, mesh, nonconservative_terms,
+                          equations, surface_integral, dg, cache)
+end
+
+@inline function _calc_interface_flux!(backend::Nothing, surface_flux_values,
+                                       mesh::Union{P4estMesh{3}, T8codeMesh{3}},
+                                       nonconservative_terms,
+                                       equations, surface_integral, dg::DG, cache)
     @unpack neighbor_ids, node_indices = cache.interfaces
     @unpack contravariant_vectors = cache.elements
     index_range = eachnode(dg)
@@ -315,6 +333,13 @@ end
 function prolong2boundaries!(cache, u,
                              mesh::Union{P4estMesh{3}, T8codeMesh{3}},
                              equations, surface_integral, dg::DG)
+    backend = backend_or_nothing(cache.boundaries)
+    _prolong2boundaries!(backend, cache, u, mesh, equations, surface_integral, dg)
+end
+
+@inline function _prolong2boundaries!(backend::Nothing, cache, u,
+                                      mesh::Union{P4estMesh{3}, T8codeMesh{3}},
+                                      equations, surface_integral, dg::DG)
     @unpack boundaries = cache
     index_range = eachnode(dg)
 
@@ -356,6 +381,15 @@ end
 function calc_boundary_flux!(cache, t, boundary_condition, boundary_indexing,
                              mesh::Union{P4estMesh{3}, T8codeMesh{3}},
                              equations, surface_integral, dg::DG)
+    backend = backend_or_nothing(cache.boundaries)
+    _calc_boundary_flux!(backend, cache, t, boundary_condition, boundary_indexing, mesh,
+                         equations, surface_integral, dg)
+end
+
+@inline function _calc_boundary_flux!(backend::Nothing, cache, t,
+                                      boundary_condition, boundary_indexing,
+                                      mesh::Union{P4estMesh{3}, T8codeMesh{3}},
+                                      equations, surface_integral, dg::DG)
     @unpack boundaries = cache
     @unpack surface_flux_values, node_coordinates, contravariant_vectors = cache.elements
     @unpack surface_flux = surface_integral
@@ -417,8 +451,14 @@ end
 
 function prolong2mortars!(cache, u,
                           mesh::Union{P4estMesh{3}, T8codeMesh{3}}, equations,
-                          mortar_l2::LobattoLegendreMortarL2,
-                          dg::DGSEM)
+                          mortar_l2::LobattoLegendreMortarL2, dg::DGSEM)
+    backend = backend_or_nothing(cache.mortars)
+    _prolong2mortars!(backend, cache, u, mesh, equations, mortar_l2, dg)
+end
+
+@inline function _prolong2mortars!(backend::Nothing, cache, u,
+                                   mesh::Union{P4estMesh{3}, T8codeMesh{3}}, equations,
+                                   mortar_l2::LobattoLegendreMortarL2, dg::DGSEM)
     @unpack fstar_tmp_threaded = cache
     @unpack neighbor_ids, node_indices = cache.mortars
     index_range = eachnode(dg)
@@ -524,6 +564,16 @@ function calc_mortar_flux!(surface_flux_values,
                            nonconservative_terms, equations,
                            mortar_l2::LobattoLegendreMortarL2,
                            surface_integral, dg::DG, cache)
+    backend = backend_or_nothing(cache.mortars)
+    _calc_mortar_flux!(backend, surface_flux_values, mesh, nonconservative_terms,
+                       equations, mortar_l2, surface_integral, dg, cache)
+end
+
+@inline function _calc_mortar_flux!(backend::Nothing, surface_flux_values,
+                                    mesh::Union{P4estMesh{3}, T8codeMesh{3}},
+                                    nonconservative_terms, equations,
+                                    mortar_l2::LobattoLegendreMortarL2,
+                                    surface_integral, dg::DG, cache)
     @unpack neighbor_ids, node_indices = cache.mortars
     @unpack contravariant_vectors = cache.elements
     @unpack fstar_primary_threaded, fstar_secondary_threaded, fstar_tmp_threaded = cache
@@ -745,6 +795,16 @@ function calc_surface_integral!(du, u,
                                 equations,
                                 surface_integral::SurfaceIntegralWeakForm,
                                 dg::DGSEM, cache)
+    backend = backend_or_nothing(cache.elements)
+    _calc_surface_integral!(backend, du, u, mesh, equations, surface_integral, dg, cache)
+
+end
+
+@inline function _calc_surface_integral!(backend::Nothing, du, u,
+                                         mesh::Union{P4estMesh{3}, T8codeMesh{3}},
+                                         equations,
+                                         surface_integral::SurfaceIntegralWeakForm,
+                                         dg::DGSEM, cache)
     @unpack boundary_interpolation = dg.basis
     @unpack surface_flux_values = cache.elements
 

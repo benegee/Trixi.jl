@@ -50,6 +50,7 @@ end
 # * `LBMCollisionCallback` must come after computing time step size because it is already part of
 #    the next time step calculation
 include("summary.jl")
+include("performance.jl")
 include("steady_state.jl")
 include("analysis.jl")
 include("alive.jl")
