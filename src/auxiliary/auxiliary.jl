@@ -380,7 +380,7 @@ end
 @inline function multiply_add_to_first_axis_atomic!(u, factor, u_node::SVector{N},
                                              indices...) where {N}
     for v in Base.OneTo(N)
-        Atomix.@atomic u[v, indices...] = u[v, indices...] + factor * u_node[v]
+        Atomix.@atomic u[v, indices...] += factor * u_node[v]
     end
     return nothing
 end
