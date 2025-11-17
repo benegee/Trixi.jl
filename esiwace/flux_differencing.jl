@@ -119,24 +119,6 @@ else
       error_statistics(du_ref, du_exp)
 end
 
-# Timing
-println()
-println("Timing reference")
-@btime begin
-      Trixi.calc_volume_integral!(du_ref, u, mesh, Trixi.False(), equations, solver.volume_integral, solver, cache)
-      CUDA.device_synchronize()
-end
-println("Timing exp_index")
-@btime begin
-      Trixi.exp_index_calc_volume_integral!(du_exp, u, mesh, Trixi.False(), equations, solver.volume_integral, solver, cache)
-      CUDA.device_synchronize()
-end
-println("Timing exp_ijk")
-@btime begin
-      Trixi.exp_ijk_calc_volume_integral!(du_exp, u, mesh, Trixi.False(), equations, solver.volume_integral, solver, cache)
-      CUDA.device_synchronize()
-end
-
 # Tuning
 println()
 best_time = Inf
