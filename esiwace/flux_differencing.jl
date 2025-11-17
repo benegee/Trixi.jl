@@ -160,7 +160,7 @@ while index_x * 32 <= 1024
             global index_x += 1
       end
 end
-println("\tBest time: ", best_time, " s -- workgroupsize: ", wgs)
+println("\tBest time: ", best_time, " s -- workgroupsize: ", best_wgs)
 println("Tuning exp_index")
 best_time = Inf
 wgs = 0
@@ -182,7 +182,7 @@ while index_x * 32 <= 1024
             global index_x += 1
       end
 end
-println("\tBest time: ", best_time, " s -- workgroupsize: ", wgs)
+println("\tBest time: ", best_time, " s -- workgroupsize: ", best_wgs)
 println("Tuning exp_ijk")
 best_time = Inf
 wgs = (0, 0)
@@ -214,6 +214,6 @@ while index_x * 32 <= 1024
       global index_x += 1
       global index_y = 1
 end
-println("\tBest time: ", best_time, " s -- workgroupsize: ", wgs)
+println("\tBest time: ", best_time, " s -- workgroupsize: ", best_wgs)
 
 finalize(mesh)
