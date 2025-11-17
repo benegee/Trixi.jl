@@ -139,40 +139,54 @@ end
 
 # Tuning
 println()
+best_time = Inf
 wgs = 0
+best_wgs = wgs
 index_x = 1
 println("Tuning reference")
 while index_x * 32 <= 1024
       global wgs = index_x * 32
-      println("  workgroupsize = ", wgs)
       try
-            @btime begin
+            res = @btimed begin
                   Trixi.calc_volume_integral!(du_ref, u, mesh, Trixi.False(), equations, solver.volume_integral, solver, cache, wgs)
                   CUDA.device_synchronize()
             end
+            if res.time < best_time
+                  global best_time = res.time
+                  global best_wgs = wgs
+            end
+            global index_x += 1
       catch
-            println("  [ERR] execution failure - ", wgs)
+            global index_x += 1
       end
-      global index_x += 1
 end
+println("\tBest time: ", best_time, " s -- workgroupsize: ", wgs)
 println("Tuning exp_index")
+best_time = Inf
 wgs = 0
+best_wgs = wgs
 index_x = 1
 while index_x * 32 <= 1024
       global wgs = index_x * 32
-      println("  workgroupsize = ", wgs)
       try
-            @btime begin
+            res = @btimed begin
                   Trixi.exp_index_calc_volume_integral!(du_exp, u, mesh, Trixi.False(), equations, solver.volume_integral, solver, cache, wgs)
                   CUDA.device_synchronize()
             end
+            if res.time < best_time
+                  global best_time = res.time
+                  global best_wgs = wgs
+            end
+            global index_x += 1
       catch
-            println("  [ERR] execution failure - ", wgs)
+            global index_x += 1
       end
-      global index_x += 1
 end
+println("\tBest time: ", best_time, " s -- workgroupsize: ", wgs)
 println("Tuning exp_ijk")
+best_time = Inf
 wgs = (0, 0)
+best_wgs = wgs
 index_x = 1
 index_y = 1
 while index_x * 32 <= 1024
@@ -183,19 +197,23 @@ while index_x * 32 <= 1024
                   continue
             end
             global wgs = (index_x * 32, index_y)
-            println("  workgroupsize = ", wgs)
             try
-                  @btime begin
+                  res = @btimed begin
                         Trixi.exp_ijk_calc_volume_integral!(du_exp, u, mesh, Trixi.False(), equations, solver.volume_integral, solver, cache, wgs)
                         CUDA.device_synchronize()
                   end
+                  if res.time < best_time
+                        global best_time = res.time
+                        global best_wgs = wgs
+                  end
+                  global index_y += 1
             catch
-                  println("  [ERR] execution failure - ", wgs)
+                  global index_y += 1
             end
-            global index_y += 1
       end
       global index_x += 1
       global index_y = 1
 end
+println("\tBest time: ", best_time, " s -- workgroupsize: ", wgs)
 
 finalize(mesh)
