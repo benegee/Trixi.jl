@@ -238,7 +238,7 @@ function calc_volume_integral!(du, u,
                                volume_integral::VolumeIntegralWeakForm,
                                dg::DGSEM, cache)
     backend = backend_or_nothing(cache.elements)
-    _calc_volume_integral!(backend, du, u, mesh, nonconservative_terms, equations,
+    _exp_ijk_calc_volume_integral!(backend, du, u, mesh, nonconservative_terms, equations,
                            volume_integral, dg, cache)
     return nothing
 end
