@@ -1,14 +1,14 @@
 [CUDA_Runtime_jll]
 local = "true"
-version = "11.8"
+version = "12.3"
 
 [HDF5]
-libhdf5 = "/lrz/sys/spack/release/23.1.0/opt/icelake/hdf5/1.14.2-gcc-wvedyel/lib/libhdf5.so"
-libhdf5_hl = "/lrz/sys/spack/release/23.1.0/opt/icelake/hdf5/1.14.2-gcc-wvedyel/lib/libhdf5_hl.so"
+libhdf5 = "/opt/ohpc/pub/libs/gnu9/hdf5/1.10.8/lib/libhdf5.so"
+libhdf5_hl = "/opt/ohpc/pub/libs/gnu9/hdf5/1.10.8/lib/libhdf5_hl.so"
 
 [HDF5_jll]
-libhdf5_hl_path = "/lrz/sys/spack/release/23.1.0/opt/icelake/hdf5/1.14.2-gcc-wvedyel/lib/libhdf5_hl.so"
-libhdf5_path = "/lrz/sys/spack/release/23.1.0/opt/icelake/hdf5/1.14.2-gcc-wvedyel/lib/libhdf5.so"
+libhdf5_hl_path = "/opt/ohpc/pub/libs/gnu9/hdf5/1.10.8/lib/libhdf5_hl.so"
+libhdf5_path = "/opt/ohpc/pub/libs/gnu9/hdf5/1.10.8/lib/libhdf5.so"
 
 [MPIPreferences]
 __clear__ = ["preloads_env_switch"]
@@ -21,10 +21,10 @@ mpiexec = "mpiexec"
 preloads = []
 
 [P4est]
-libp4est = "/dss/dsstbyfs02/pn76vi/pn76vi-dss-0000/install/t8code/lib/libp4est.so"
-libsc = "/dss/dsstbyfs02/pn76vi/pn76vi-dss-0000/install/t8code/lib/libsc.so"
+libp4est = "/home/alessio/.local/lib/libp4est.so"
+libsc = "/home/alessio/.local/lib/libsc.so"
 
 [T8code]
-libp4est = "/dss/dsstbyfs02/pn76vi/pn76vi-dss-0000/install/t8code/lib/libp4est.so"
-libsc = "/dss/dsstbyfs02/pn76vi/pn76vi-dss-0000/install/t8code/lib/libsc.so"
-libt8 = "/dss/dsstbyfs02/pn76vi/pn76vi-dss-0000/install/t8code/lib/libt8.so"
+libp4est = "/home/alessio/.local/lib/libp4est.so"
+libsc = "/home/alessio/.local/lib/libsc.so"
+libt8 = "/home/alessio/.local/lib/libt8.so"
